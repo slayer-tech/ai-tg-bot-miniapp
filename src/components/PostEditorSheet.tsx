@@ -535,7 +535,7 @@ export function PostEditorSheet({
                 />
                 {pinAfter && (
                   <p className="field-hint">
-                    Нужно право бота «Редактирование сообщений» в настройках канала (Telegram API).
+                    Нужно право бота «Редактирование сообщений» в настройках канала.
                   </p>
                 )}
                 <Toggle
