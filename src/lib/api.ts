@@ -210,6 +210,26 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ idea }),
     }),
+  generateTrendDraft: () =>
+    request<DraftFull>('/api/drafts/generate/trend', { method: 'POST' }),
+  generateReferenceDraft: (referenceText: string, file?: File) => {
+    const auth = authHeader()
+    if (!auth || !API_URL) throw new Error('Auth required')
+    const fd = new FormData()
+    fd.append('reference_text', referenceText)
+    if (file) fd.append('file', file)
+    return fetch(`${API_URL}/api/drafts/generate/reference`, {
+      method: 'POST',
+      headers: { Authorization: auth },
+      body: fd,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.detail || `HTTP ${res.status}`)
+      }
+      return res.json() as Promise<DraftFull>
+    })
+  },
   getDraft: (id: number) => request<DraftFull>(`/api/drafts/${id}`),
   patchDraft: (id: number, data: Record<string, unknown>) =>
     request<DraftFull>(`/api/drafts/${id}`, {

@@ -106,3 +106,31 @@ export function StatGrid({ items }: { items: { label: string; value: string | nu
 export function Empty({ text }: { text: string }) {
   return <p className="empty">{text}</p>
 }
+
+export function SegmentChips<T extends string | number>({
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  options: { value: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="segment-chips">
+      {options.map((o) => (
+        <button
+          key={String(o.value)}
+          type="button"
+          className={`segment-chip${value === o.value ? ' active' : ''}`}
+          disabled={disabled}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}

@@ -638,3 +638,43 @@ select.input {
   box-shadow: 0 4px 20px color-mix(in srgb, var(--accent) 45%, transparent);
 }
 .fab:active { transform: scale(0.95); }
+
+.segment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.segment-chip {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 50%, transparent);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.segment-chip.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.segment-chip:disabled { opacity: 0.5; }
+
+.button-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.published-banner {
+  background: color-mix(in srgb, #34c759 12%, transparent);
+  color: #34c759;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
