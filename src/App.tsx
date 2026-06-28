@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
 import './App.css'
 import { AutopilotTab } from './components/AutopilotTab'
+import { CreatePostDialog } from './components/CreatePostDialog'
 import { PlannerTab } from './components/PlannerTab'
+import { PostEditorSheet } from './components/PostEditorSheet'
 import { ProfileTab } from './components/ProfileTab'
 import { SettingsTab } from './components/SettingsTab'
 import {
@@ -41,6 +43,10 @@ export default function App() {
   const [weekMonday, setWeekMonday] = useState<string | undefined>()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [autopilot, setAutopilot] = useState<Autopilot | null>(null)
+  const [editDraftId, setEditDraftId] = useState<number | null>(null)
+  const [createDay, setCreateDay] = useState<string | undefined>()
+  const [showCreate, setShowCreate] = useState(false)
+  const [draftsVersion, setDraftsVersion] = useState(0)
 
   const loadChannelData = useCallback(async (monday?: string) => {
     const [w, st, ap, bill] = await Promise.all([
@@ -155,7 +161,16 @@ export default function App() {
         )}
 
         {!loading && !noChannel && tab === 'planner' && (
-          <PlannerTab week={week} onWeekChange={changeWeek} />
+          <PlannerTab
+            week={week}
+            onWeekChange={changeWeek}
+            onOpenDraft={(id) => setEditDraftId(id)}
+            onCreatePost={(day) => {
+              setCreateDay(day)
+              setShowCreate(true)
+            }}
+            refreshKey={draftsVersion}
+          />
         )}
         {!loading && !noChannel && tab === 'autopilot' && (
           <AutopilotTab autopilot={autopilot} onUpdate={loadChannelData} />
@@ -190,6 +205,29 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {showCreate && (
+        <CreatePostDialog
+          defaultDay={createDay}
+          onClose={() => setShowCreate(false)}
+          onCreated={(id) => {
+            setShowCreate(false)
+            setEditDraftId(id)
+          }}
+        />
+      )}
+
+      {editDraftId !== null && (
+        <PostEditorSheet
+          draftId={editDraftId}
+          defaultDay={createDay}
+          onClose={() => setEditDraftId(null)}
+          onSaved={() => {
+            loadChannelData(weekMonday)
+            setDraftsVersion((v) => v + 1)
+          }}
+        />
+      )}
     </div>
   )
 }

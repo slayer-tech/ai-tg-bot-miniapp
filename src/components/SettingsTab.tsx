@@ -6,6 +6,7 @@ import {
   type Channel,
   type Settings,
 } from '../lib/api'
+import { RichTextEditor } from './RichTextEditor'
 import { Btn, Card, Empty, Field, Toggle } from './ui'
 
 export function SettingsTab({
@@ -70,15 +71,21 @@ export function SettingsTab({
       {msg && <div className="toast">{msg}</div>}
 
       <Card title="Публикация">
-        <Field label="Подпись (footer)" hint="HTML Telegram: <b>, <i>, ссылки">
-          <textarea
-            className="textarea"
-            rows={3}
+        <Field label="Подпись (footer)" hint="Выделите текст и нажмите B / I / U / 🔗 — HTML не нужен">
+          <RichTextEditor
             value={footer}
-            onChange={(e) => setFooter(e.target.value)}
+            onChange={setFooter}
             placeholder="Текст внизу каждого поста…"
+            rows={3}
+            disabled={busy}
           />
         </Field>
+        {footer && (
+          <div className="footer-preview-box">
+            <span className="field-hint">Превью:</span>
+            <div className="footer-render" dangerouslySetInnerHTML={{ __html: footer.replace(/\n/g, '<br>') }} />
+          </div>
+        )}
         <Btn
           disabled={busy}
           onClick={() => run(async () => {

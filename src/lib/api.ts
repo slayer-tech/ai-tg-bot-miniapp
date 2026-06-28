@@ -2,6 +2,10 @@ import WebApp from '@twa-dev/sdk'
 
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
+export function apiBase(): string {
+  return API_URL
+}
+
 export function hasTelegramAuth(): boolean {
   return Boolean(WebApp.initData)
 }
@@ -38,7 +42,34 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
   }
+  if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
+}
+
+async function upload<T>(path: string, file: File): Promise<T> {
+  const auth = authHeader()
+  if (!auth || !API_URL) throw new Error('Auth required')
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { Authorization: auth },
+    body: fd,
+  })
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}))
+    throw new Error(j.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function fetchMediaUrl(path: string): Promise<string> {
+  const auth = authHeader()
+  if (!auth || !API_URL) throw new Error('Auth required')
+  const res = await fetch(`${API_URL}${path}`, { headers: { Authorization: auth } })
+  if (!res.ok) throw new Error('Media load failed')
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
 }
 
 export type Me = {
@@ -82,6 +113,25 @@ export type DraftPreview = {
   status: string
   text: string
   scheduled_at: string | null
+}
+
+export type DraftFull = {
+  id: number
+  status: string
+  text: string
+  text_html: string
+  footer_preview: string
+  media_url: string | null
+  has_media: boolean
+  scheduled_at: string | null
+  autodelete_hours: number | null
+  inline_button_text: string | null
+  inline_button_url: string | null
+  pin_after_publish: boolean
+  disable_notification: boolean
+  source_type: string
+  is_editable: boolean
+  is_published: boolean
 }
 
 export type CalendarWeek = {
@@ -145,6 +195,55 @@ export const api = {
     request<{ text_credits: number; image_credits: number; unlimited: boolean }>(
       '/api/billing',
     ),
+
+  listDrafts: (status?: string) =>
+    request<{ drafts: DraftFull[] }>(
+      `/api/drafts${status ? `?status=${status}` : ''}`,
+    ),
+  createDraft: (text = '') =>
+    request<DraftFull>('/api/drafts', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+  generateIdeaDraft: (idea: string) =>
+    request<DraftFull>('/api/drafts/generate/idea', {
+      method: 'POST',
+      body: JSON.stringify({ idea }),
+    }),
+  getDraft: (id: number) => request<DraftFull>(`/api/drafts/${id}`),
+  patchDraft: (id: number, data: Record<string, unknown>) =>
+    request<DraftFull>(`/api/drafts/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteDraft: (id: number) =>
+    request<{ ok: boolean }>(`/api/drafts/${id}`, { method: 'DELETE' }),
+  publishDraft: (id: number) =>
+    request<DraftFull>(`/api/drafts/${id}/publish`, { method: 'POST' }),
+  scheduleDraft: (id: number, datetime_msk: string) =>
+    request<DraftFull & { scheduled_label?: string }>(
+      `/api/drafts/${id}/schedule`,
+      { method: 'POST', body: JSON.stringify({ datetime_msk }) },
+    ),
+  uploadDraftMedia: (id: number, file: File) =>
+    upload<DraftFull>(`/api/drafts/${id}/media`, file),
+  removeDraftMedia: (id: number) =>
+    request<DraftFull>(`/api/drafts/${id}/media`, { method: 'DELETE' }),
+  aiText: (id: number, action: string, prompt?: string) =>
+    request<DraftFull>(`/api/drafts/${id}/ai/text`, {
+      method: 'POST',
+      body: JSON.stringify({ action, prompt }),
+    }),
+  aiImage: (
+    id: number,
+    action: 'uniqueify' | 'generate',
+    aspect = 'square',
+    prompt?: string,
+  ) =>
+    request<DraftFull>(`/api/drafts/${id}/ai/image`, {
+      method: 'POST',
+      body: JSON.stringify({ action, aspect, prompt }),
+    }),
 }
 
 export function stripHtml(html: string): string {
