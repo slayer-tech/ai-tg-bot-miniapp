@@ -270,7 +270,7 @@ export const api = {
   deleteDraft: (id: number) =>
     request<{ ok: boolean }>(`/api/drafts/${id}`, { method: 'DELETE' }),
   publishDraft: (id: number) =>
-    request<DraftFull>(`/api/drafts/${id}/publish`, { method: 'POST' }),
+    request<DraftFull & { warning?: string }>(`/api/drafts/${id}/publish`, { method: 'POST' }),
   scheduleDraft: (id: number, datetime_msk: string) =>
     request<DraftFull & { scheduled_label?: string }>(
       `/api/drafts/${id}/schedule`,
