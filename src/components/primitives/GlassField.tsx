@@ -13,13 +13,36 @@ export function GlassField({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <label className="text-xs font-medium uppercase tracking-wider text-[var(--glass-hint)]">
+    <div className="flex flex-col gap-2.5">
+      <label className="text-sm font-semibold text-[var(--glass-text)] leading-snug">
         {label}
       </label>
       {children}
       {error && <p className="text-xs text-[var(--glass-danger)] m-0">{error}</p>}
-      {hint && !error && <p className="text-xs text-[var(--glass-hint)] m-0">{hint}</p>}
+      {hint && !error && <p className="text-[13px] text-[var(--glass-hint)] m-0 leading-snug">{hint}</p>}
+    </div>
+  )
+}
+
+/** Секция формы: контент + действие с нормальными отступами */
+export function GlassFormSection({
+  children,
+  action,
+  divider,
+}: {
+  children: ReactNode
+  action?: ReactNode
+  divider?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-4',
+        divider && 'pb-7 mb-7 border-b border-[var(--glass-border)] last:border-0 last:pb-0 last:mb-0',
+      )}
+    >
+      <div className="flex flex-col gap-3">{children}</div>
+      {action && <div className="flex justify-end pt-1">{action}</div>}
     </div>
   )
 }

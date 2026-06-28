@@ -178,9 +178,9 @@ export function AutopilotTab({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       <GlassCard title="Autopilot">
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-2.5 mb-4">
           <span
             className={`flex h-2.5 w-2.5 rounded-full ${running ? 'bg-[var(--glass-success)]' : 'bg-[var(--glass-hint)]'}`}
           >
@@ -192,17 +192,15 @@ export function AutopilotTab({
               />
             )}
           </span>
-          <span className="text-sm font-medium">{running ? 'Работает' : 'На паузе'}</span>
+          <span className="text-sm font-semibold">{running ? 'Работает' : 'На паузе'}</span>
         </div>
 
-        <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4 pb-4 border-b border-[var(--glass-border)]">
+        <div className="flex flex-wrap gap-x-6 gap-y-3 mb-5 pb-5 border-b border-[var(--glass-border)]">
           {stats.length ? (
             stats.map(([k, v]) => (
-              <div key={k} className="flex flex-col">
-                <span className="font-mono text-lg font-semibold">{v}</span>
-                <span className="text-[10px] uppercase tracking-wider text-[var(--glass-hint)]">
-                  {QUEUE_LABELS[k] || k}
-                </span>
+              <div key={k} className="flex flex-col gap-0.5">
+                <span className="font-mono text-base font-semibold">{v}</span>
+                <span className="text-xs text-[var(--glass-hint)]">{QUEUE_LABELS[k] || k}</span>
               </div>
             ))
           ) : (
@@ -211,10 +209,11 @@ export function AutopilotTab({
         </div>
 
         <GlassButton
+          size="sm"
           onClick={toggleRun}
           disabled={busy}
           full
-          trailing={running ? <Pause size={14} weight="fill" /> : <Play size={14} weight="fill" />}
+          trailing={running ? <Pause size={12} weight="fill" /> : <Play size={12} weight="fill" />}
         >
           {running ? 'Поставить на паузу' : 'Запустить'}
         </GlassButton>
@@ -224,31 +223,25 @@ export function AutopilotTab({
         title="Параметры"
         action={
           dirty && (
-            <span className="text-[10px] uppercase tracking-wider text-[var(--glass-warning)]">
-              не сохранено
-            </span>
+            <span className="text-xs font-medium text-[var(--glass-warning)]">не сохранено</span>
           )
         }
       >
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-7">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-[var(--glass-hint)] m-0 mb-2">
-              Постов в день
-            </p>
+            <p className="text-sm font-semibold text-[var(--glass-text)] m-0 mb-3">Постов в день</p>
             <PostsPerDayPicker value={postsPerDay} onChange={setPostsPerDay} />
           </div>
 
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-[var(--glass-hint)] m-0 mb-1">
-              Глубина генерации
-            </p>
-            <p className="text-[11px] text-[var(--glass-hint)] m-0 mb-3">
+            <p className="text-sm font-semibold text-[var(--glass-text)] m-0 mb-1">Глубина генерации</p>
+            <p className="text-[13px] text-[var(--glass-hint)] m-0 mb-4 leading-snug">
               Сколько дней вперёд наполнять очередь
             </p>
             <HorizonPicker days={genDays} postsPerDay={postsPerDay} onChange={setGenDays} />
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1 border-t border-[var(--glass-border)]">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--glass-border)]">
             <AnimatePresence mode="wait">
               {savedFlash && (
                 <motion.span

@@ -22,7 +22,7 @@ export function GlassShell({
       <div
         className={cn(
           'rounded-[var(--glass-radius-inner)] bg-[var(--glass-bg)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]',
-          padding && 'p-4',
+          padding && 'p-5',
           innerClassName,
         )}
       >

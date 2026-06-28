@@ -26,15 +26,15 @@ export function GlassButton({
   trailing?: ReactNode
 }) {
   const sizes: Record<Size, string> = {
-    default: 'px-5 py-3 text-sm',
-    sm: 'px-4 py-2 text-xs',
+    default: 'px-4 py-2 text-[13px] leading-tight',
+    sm: 'px-3 py-1.5 text-xs leading-tight',
   }
 
   const base =
-    'group inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-transform duration-200 ease-[var(--spring)] active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100'
+    'group inline-flex items-center justify-center gap-1.5 rounded-xl font-semibold transition-transform duration-200 ease-[var(--spring)] active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100'
 
   const variants: Record<Variant, string> = {
-    primary: 'bg-[var(--glass-accent)] text-[#041510] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.55)]',
+    primary: 'bg-[var(--glass-accent)] text-[#041510] shadow-[0_2px_10px_-4px_rgba(16,185,129,0.45)]',
     secondary:
       'bg-[color-mix(in_srgb,var(--glass-text)_8%,transparent)] text-[var(--glass-text)] ring-1 ring-[var(--glass-border)]',
     ghost: 'bg-transparent text-[var(--glass-hint)] hover:text-[var(--glass-text)]',
@@ -53,7 +53,7 @@ export function GlassButton({
         <span
           className={cn(
             'flex items-center justify-center rounded-full bg-black/10 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-px group-active:scale-95',
-            size === 'sm' ? 'h-6 w-6' : 'h-8 w-8',
+            size === 'sm' ? 'h-5 w-5' : 'h-6 w-6',
           )}
         >
           {trailing}
