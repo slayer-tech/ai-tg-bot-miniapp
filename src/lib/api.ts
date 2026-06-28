@@ -137,6 +137,8 @@ export type DraftPreview = {
   status: string
   text: string
   scheduled_at: string | null
+  published_at?: string | null
+  calendar_at?: string | null
 }
 
 export type DraftFull = {

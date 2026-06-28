@@ -11,10 +11,16 @@ import {
   type DraftFull,
   type DraftPreview,
 } from '../lib/api'
+import { formatTimeMsk, mskTodayIso } from '../lib/scheduleMsk'
 import { Btn, Card, Empty } from './ui'
 
 function weekDates(monday: string): string[] {
   return Array.from({ length: 7 }, (_, i) => addDays(monday, i))
+}
+
+function draftDisplayTime(d: DraftPreview): string {
+  const iso = d.calendar_at || d.published_at || d.scheduled_at
+  return iso ? formatTimeMsk(iso) : '—'
 }
 
 function DraftItem({
@@ -24,12 +30,7 @@ function DraftItem({
   d: DraftPreview
   onOpen: (id: number) => void
 }) {
-  const time = d.scheduled_at
-    ? new Date(d.scheduled_at).toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : '—'
+  const time = draftDisplayTime(d)
   return (
     <button type="button" className="draft-item draft-click" onClick={() => onOpen(d.id)}>
       <div className="draft-meta">
@@ -77,8 +78,9 @@ export function PlannerTab({
   if (!week) return <Empty text="Нет данных календаря" />
 
   const days = weekDates(week.monday)
-  const today = new Date().toISOString().slice(0, 10)
-  const sel = selected || today
+  const today = mskTodayIso()
+  const defaultSel = days.includes(today) ? today : week.monday
+  const sel = selected && days.includes(selected) ? selected : defaultSel
   const dayDrafts = week.drafts_by_day[sel] || []
 
   let totalS = 0

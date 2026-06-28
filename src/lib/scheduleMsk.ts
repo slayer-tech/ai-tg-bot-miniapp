@@ -21,6 +21,16 @@ function mskParts(date = new Date()) {
   }
 }
 
+export function mskTodayIso(): string {
+  const p = mskParts()
+  return `${p.year}-${p.month}-${p.day}`
+}
+
+export function formatTimeMsk(iso: string): string {
+  const p = mskParts(new Date(iso))
+  return `${p.hour}:${p.minute}`
+}
+
 export function formatScheduleMsk(date = new Date()): string {
   const p = mskParts(date)
   return `${p.day}.${p.month}.${p.year} ${p.hour}:${p.minute}`
