@@ -1,5 +1,5 @@
 import WebApp from '@twa-dev/sdk'
-import { humanApiError } from './scheduleMsk'
+import { humanApiError, humanError } from './scheduleMsk'
 
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
@@ -25,14 +25,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!API_URL) {
     throw new Error('VITE_API_URL не задан при сборке')
   }
-  const res = await fetch(`${API_URL}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: auth,
-      ...(init?.headers || {}),
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: auth,
+        ...(init?.headers || {}),
+      },
+    })
+  } catch (e) {
+    throw new Error(humanError(e))
+  }
   if (!res.ok) {
     let msg = `HTTP ${res.status}`
     try {
@@ -44,7 +49,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         msg = d || j.message || msg
       }
     } catch {
-      msg = (await res.text()) || msg
+      try {
+        msg = (await res.text()) || msg
+      } catch {
+        /* keep status */
+      }
     }
     throw new Error(humanApiError(typeof msg === 'string' ? msg : JSON.stringify(msg)))
   }
@@ -54,14 +63,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function upload<T>(path: string, file: File): Promise<T> {
   const auth = authHeader()
-  if (!auth || !API_URL) throw new Error('Auth required')
+  if (!auth || !API_URL) throw new Error('Откройте приложение через бота в Telegram')
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch(`${API_URL}${path}`, {
-    method: 'POST',
-    headers: { Authorization: auth },
-    body: fd,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: auth },
+      body: fd,
+    })
+  } catch (e) {
+    throw new Error(humanError(e))
+  }
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
     throw new Error(humanApiError(j.detail || `HTTP ${res.status}`))
@@ -69,13 +83,17 @@ async function upload<T>(path: string, file: File): Promise<T> {
   return res.json()
 }
 
-export async function fetchMediaUrl(path: string): Promise<string> {
+export async function fetchMediaUrl(path: string): Promise<string | null> {
   const auth = authHeader()
-  if (!auth || !API_URL) throw new Error('Auth required')
-  const res = await fetch(`${API_URL}${path}`, { headers: { Authorization: auth } })
-  if (!res.ok) throw new Error('Media load failed')
-  const blob = await res.blob()
-  return URL.createObjectURL(blob)
+  if (!auth || !API_URL) return null
+  try {
+    const res = await fetch(`${API_URL}${path}`, { headers: { Authorization: auth } })
+    if (!res.ok) return null
+    const blob = await res.blob()
+    return URL.createObjectURL(blob)
+  } catch {
+    return null
+  }
 }
 
 export type Me = {
@@ -218,23 +236,27 @@ export const api = {
     }),
   generateTrendDraft: () =>
     request<DraftFull>('/api/drafts/generate/trend', { method: 'POST' }),
-  generateReferenceDraft: (referenceText: string, file?: File) => {
+  generateReferenceDraft: async (referenceText: string, file?: File) => {
     const auth = authHeader()
-    if (!auth || !API_URL) throw new Error('Auth required')
+    if (!auth || !API_URL) throw new Error('Откройте приложение через бота в Telegram')
     const fd = new FormData()
     fd.append('reference_text', referenceText)
     if (file) fd.append('file', file)
-    return fetch(`${API_URL}/api/drafts/generate/reference`, {
-      method: 'POST',
-      headers: { Authorization: auth },
-      body: fd,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(humanApiError(j.detail || `HTTP ${res.status}`))
-      }
-      return res.json() as Promise<DraftFull>
-    })
+    let res: Response
+    try {
+      res = await fetch(`${API_URL}/api/drafts/generate/reference`, {
+        method: 'POST',
+        headers: { Authorization: auth },
+        body: fd,
+      })
+    } catch (e) {
+      throw new Error(humanError(e))
+    }
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      throw new Error(humanApiError(j.detail || `HTTP ${res.status}`))
+    }
+    return res.json() as Promise<DraftFull>
   },
   getDraft: (id: number) => request<DraftFull>(`/api/drafts/${id}`),
   patchDraft: (id: number, data: Record<string, unknown>) =>
@@ -323,3 +345,5 @@ export function statusClass(s: string): string {
   if (s === 'failed') return 'badge err'
   return 'badge'
 }
+
+export { humanError } from './scheduleMsk'

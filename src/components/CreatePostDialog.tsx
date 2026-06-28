@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { api } from '../lib/api'
+import { api, humanError } from '../lib/api'
 import { Btn } from './ui'
 
 type Mode = 'pick' | 'idea' | 'reference'
@@ -30,7 +30,7 @@ export function CreatePostDialog({
       WebApp.HapticFeedback?.notificationOccurred('success')
       onCreated(id)
     } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e))
+      setErr(humanError(e))
     } finally {
       setBusy(false)
     }

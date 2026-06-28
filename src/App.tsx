@@ -11,6 +11,7 @@ import {
   api,
   channelName,
   hasTelegramAuth,
+  humanError,
   type Autopilot,
   type CalendarWeek,
   type Channel,
@@ -86,7 +87,7 @@ export default function App() {
         setAutopilot(null)
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(humanError(e))
     } finally {
       setLoading(false)
     }
@@ -119,7 +120,7 @@ export default function App() {
       const w = await api.getCalendarWeek(monday)
       setWeek(w)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(humanError(e))
     }
   }
 
@@ -136,7 +137,7 @@ export default function App() {
         </div>
         {active && (
           <span className={`conn ${active.is_bot_connected ? 'ok' : 'bad'}`}>
-            {active.is_bot_connected ? '● online' : '● offline'}
+            {active.is_bot_connected ? '● онлайн' : '● офлайн'}
           </span>
         )}
       </header>

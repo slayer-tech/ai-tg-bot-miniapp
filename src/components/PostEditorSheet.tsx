@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { api, fetchMediaUrl, statusLabel, stripHtml, type DraftFull } from '../lib/api'
+import { api, fetchMediaUrl, humanError, statusLabel, stripHtml, type DraftFull } from '../lib/api'
 import {
   defaultScheduleMsk,
   formatScheduleMsk,
@@ -91,7 +91,7 @@ export function PostEditorSheet({
   }
 
   useEffect(() => {
-    load().catch((e) => setMsg(e instanceof Error ? e.message : String(e)))
+    load().catch((e) => setMsg(humanError(e)))
     return () => {
       setMediaSrc((prev) => {
         if (prev) URL.revokeObjectURL(prev)
