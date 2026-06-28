@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { api, fetchMediaUrl, statusLabel, stripHtml, type DraftFull } from '../lib/api'
+import {
+  defaultScheduleMsk,
+  formatScheduleMsk,
+  scheduleFromIso,
+} from '../lib/scheduleMsk'
 import { RichTextEditor } from './RichTextEditor'
 import { Btn, SegmentChips, Toggle } from './ui'
 
@@ -21,15 +26,7 @@ const ASPECT_OPTS: { value: Aspect; label: string }[] = [
 ]
 
 function defaultSchedule(dayIso?: string): string {
-  const d = dayIso ? new Date(dayIso + 'T12:00:00') : new Date()
-  if (!dayIso) {
-    d.setDate(d.getDate() + 1)
-    d.setHours(12, 0, 0, 0)
-  } else {
-    d.setHours(12, 0, 0, 0)
-  }
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  return defaultScheduleMsk(dayIso)
 }
 
 function toAutoDel(h: number | null): AutoDel {
@@ -73,11 +70,7 @@ export function PostEditorSheet({
     setPinAfter(d.pin_after_publish)
     setSilent(d.disable_notification)
     if (d.scheduled_at) {
-      const dt = new Date(d.scheduled_at)
-      const pad = (n: number) => String(n).padStart(2, '0')
-      setScheduleAt(
-        `${pad(dt.getDate())}.${pad(dt.getMonth() + 1)}.${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`,
-      )
+      setScheduleAt(scheduleFromIso(d.scheduled_at))
     }
     if (d.media_url) {
       const url = await fetchMediaUrl(d.media_url)
@@ -125,20 +118,23 @@ export function PostEditorSheet({
     }
   }
 
-  const patchAll = async (extra: Record<string, unknown> = {}) => {
-    const d = await api.patchDraft(draftId, {
+  const patchForPublish = async () => {
+    const payload: Record<string, unknown> = {
       text,
-      inline_button_url: btnUrl.trim() || null,
-      inline_button_text: btnText.trim() || null,
-      clear_button: !btnUrl.trim(),
       autodelete_hours: autodelete || 0,
       pin_after_publish: pinAfter,
       disable_notification: silent,
-      ...extra,
-    })
-    await applyDraft(d)
-    return d
+    }
+    if (btnUrl.trim()) {
+      payload.inline_button_url = btnUrl.trim()
+      payload.inline_button_text = btnText.trim() || '/auto'
+    } else {
+      payload.clear_button = true
+    }
+    await applyDraft(await api.patchDraft(draftId, payload))
   }
+
+  const canPublish = Boolean(stripHtml(text).trim() || draft?.has_media)
 
   const saveAutodelete = (h: AutoDel) => {
     setAutodelete(h)
@@ -187,7 +183,19 @@ export function PostEditorSheet({
             type="button"
             className="icon-btn"
             disabled={busy || !editable}
-            onClick={() => run(async () => { await patchAll() }, 'Сохранено')}
+            onClick={() =>
+              run(async () => {
+                await api.patchDraft(draftId, {
+                  text,
+                  autodelete_hours: autodelete || 0,
+                  pin_after_publish: pinAfter,
+                  disable_notification: silent,
+                  ...(btnUrl.trim()
+                    ? { inline_button_url: btnUrl.trim(), inline_button_text: btnText.trim() || '/auto' }
+                    : { clear_button: true }),
+                }).then(applyDraft)
+              }, 'Сохранено')
+            }
           >
             💾
           </button>
@@ -418,14 +426,25 @@ export function PostEditorSheet({
           {editable && (
             <section className="editor-section">
               <h3>🚀 Публикация</h3>
-              <input className="input" placeholder="ДД.ММ.ГГГГ ЧЧ:ММ" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
-              <p className="field-hint">Московское время. Джиттер ±7–23 мин если включён.</p>
+              <input className="input" placeholder="ДД.ММ.ГГГГ ЧЧ:ММ (Москва)" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+              <p className="field-hint">Московское время (МСК). Джиттер ±7–23 мин если включён.</p>
+              <div className="ai-row">
+                <Btn variant="secondary" disabled={busy} onClick={() => setScheduleAt(formatScheduleMsk(new Date(Date.now() + 3600000)))}>
+                  +1 ч
+                </Btn>
+                <Btn variant="secondary" disabled={busy} onClick={() => setScheduleAt(formatScheduleMsk(new Date(Date.now() + 3 * 3600000)))}>
+                  +3 ч
+                </Btn>
+                <Btn variant="secondary" disabled={busy} onClick={() => setScheduleAt(defaultScheduleMsk())}>
+                  Завтра 12:00
+                </Btn>
+              </div>
               <div className="publish-row">
                 <Btn
-                  disabled={busy}
+                  disabled={busy || !canPublish}
                   onClick={() =>
                     run(async () => {
-                      await patchAll()
+                      await patchForPublish()
                       await api.scheduleDraft(draftId, scheduleAt)
                       onClose()
                     }, 'Запланировано')
@@ -436,10 +455,10 @@ export function PostEditorSheet({
                 </Btn>
                 <Btn
                   variant="secondary"
-                  disabled={busy}
+                  disabled={busy || !canPublish}
                   onClick={() =>
                     run(async () => {
-                      await patchAll()
+                      await patchForPublish()
                       await api.publishDraft(draftId)
                       onClose()
                     }, 'Опубликовано')
@@ -449,6 +468,9 @@ export function PostEditorSheet({
                   🚀 Сейчас
                 </Btn>
               </div>
+              {!canPublish && (
+                <p className="field-hint err-hint">Добавьте текст или картинку для публикации</p>
+              )}
             </section>
           )}
 

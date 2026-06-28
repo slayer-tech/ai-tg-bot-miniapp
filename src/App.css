@@ -671,6 +671,8 @@ select.input {
   background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
+.err-hint { color: #ff453a; }
+
 .published-banner {
   background: color-mix(in srgb, #34c759 12%, transparent);
   color: #34c759;

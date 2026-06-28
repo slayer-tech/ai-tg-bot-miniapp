@@ -1,4 +1,5 @@
 import WebApp from '@twa-dev/sdk'
+import { humanApiError } from './scheduleMsk'
 
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
@@ -36,11 +37,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     let msg = `HTTP ${res.status}`
     try {
       const j = await res.json()
-      msg = j.detail || j.message || msg
+      const d = j.detail
+      if (Array.isArray(d)) {
+        msg = d.map((x: { msg?: string }) => x.msg || '').filter(Boolean).join('; ') || msg
+      } else {
+        msg = d || j.message || msg
+      }
     } catch {
       msg = (await res.text()) || msg
     }
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg))
+    throw new Error(humanApiError(typeof msg === 'string' ? msg : JSON.stringify(msg)))
   }
   if (res.status === 204) return undefined as T
   return res.json() as Promise<T>
@@ -58,7 +64,7 @@ async function upload<T>(path: string, file: File): Promise<T> {
   })
   if (!res.ok) {
     const j = await res.json().catch(() => ({}))
-    throw new Error(j.detail || `HTTP ${res.status}`)
+    throw new Error(humanApiError(j.detail || `HTTP ${res.status}`))
   }
   return res.json()
 }
@@ -225,7 +231,7 @@ export const api = {
     }).then(async (res) => {
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
-        throw new Error(j.detail || `HTTP ${res.status}`)
+        throw new Error(humanApiError(j.detail || `HTTP ${res.status}`))
       }
       return res.json() as Promise<DraftFull>
     })
