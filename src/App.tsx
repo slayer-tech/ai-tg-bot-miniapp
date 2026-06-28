@@ -47,13 +47,13 @@ export default function App() {
       api.getCalendarWeek(monday),
       api.getSettings(),
       api.getAutopilot(),
-      api.getBilling(),
+      api.getBilling().catch(() => null),
     ])
     setWeek(w)
     setWeekMonday(w.monday)
     setSettings(st)
     setAutopilot(ap)
-    setBilling(bill)
+    if (bill) setBilling(bill)
   }, [])
 
   const load = useCallback(async () => {
