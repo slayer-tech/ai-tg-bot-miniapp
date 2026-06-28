@@ -1,5 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { LinkSimple, TextB, TextItalic, TextUnderline, X } from '@phosphor-icons/react'
 import { formatCmd, htmlToTelegram, saveSelection, telegramToHtml } from '../lib/richText'
+import { GlassButton } from './primitives/GlassButton'
+import { GlassModal } from './primitives/GlassSheet'
 
 export type RichTextEditorHandle = {
   getValue: () => string
@@ -35,12 +38,16 @@ export const RichTextEditor = forwardRef(function RichTextEditor(
     lastExternal.current = value
   }, [value])
 
-  useImperativeHandle(ref, () => ({
-    getValue: () => {
-      if (bodyRef.current) return htmlToTelegram(bodyRef.current.innerHTML)
-      return lastExternal.current ?? value
-    },
-  }), [value])
+  useImperativeHandle(
+    ref,
+    () => ({
+      getValue: () => {
+        if (bodyRef.current) return htmlToTelegram(bodyRef.current.innerHTML)
+        return lastExternal.current ?? value
+      },
+    }),
+    [value],
+  )
 
   useEffect(() => {
     if (linkOpen) linkInputRef.current?.focus()
@@ -87,29 +94,31 @@ export const RichTextEditor = forwardRef(function RichTextEditor(
   }
 
   const minH = rows * 22
+  const tb =
+    'flex h-9 w-9 items-center justify-center rounded-lg text-[var(--glass-text)] transition-colors hover:bg-[color-mix(in_srgb,var(--glass-text)_8%,transparent)] disabled:opacity-40'
 
   return (
-    <div className={`rte${disabled ? ' rte-disabled' : ''}`}>
-      <div className="rte-toolbar">
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('bold') }} title="Жирный">
-          <b>B</b>
+    <div className={disabled ? 'opacity-60 pointer-events-none' : ''}>
+      <div className="flex flex-wrap gap-1 mb-2 p-1 rounded-xl bg-[color-mix(in_srgb,var(--glass-text)_4%,transparent)] ring-1 ring-[var(--glass-border)]">
+        <button type="button" disabled={disabled} className={tb} onMouseDown={(e) => { e.preventDefault(); runCmd('bold') }} title="Жирный">
+          <TextB size={18} weight="bold" />
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('italic') }} title="Курсив">
-          <i>I</i>
+        <button type="button" disabled={disabled} className={tb} onMouseDown={(e) => { e.preventDefault(); runCmd('italic') }} title="Курсив">
+          <TextItalic size={18} weight="light" />
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('underline') }} title="Подчёркнутый">
-          <u>U</u>
+        <button type="button" disabled={disabled} className={tb} onMouseDown={(e) => { e.preventDefault(); runCmd('underline') }} title="Подчёркнутый">
+          <TextUnderline size={18} weight="light" />
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); openLinkDialog() }} title="Ссылка">
-          🔗
+        <button type="button" disabled={disabled} className={tb} onMouseDown={(e) => { e.preventDefault(); openLinkDialog() }} title="Ссылка">
+          <LinkSimple size={18} weight="light" />
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('removeFormat') }} title="Сброс форматирования и ссылок">
-          ✕
+        <button type="button" disabled={disabled} className={tb} onMouseDown={(e) => { e.preventDefault(); runCmd('removeFormat') }} title="Сброс">
+          <X size={18} weight="light" />
         </button>
       </div>
       <div
         ref={bodyRef}
-        className="rte-body"
+        className="rte-body rounded-xl bg-[color-mix(in_srgb,var(--glass-text)_4%,transparent)] px-4 py-3 text-sm ring-1 ring-[var(--glass-border)] focus:outline-none focus:ring-[var(--glass-accent)]"
         contentEditable={!disabled}
         data-placeholder={placeholder}
         style={{ minHeight: minH }}
@@ -118,39 +127,37 @@ export const RichTextEditor = forwardRef(function RichTextEditor(
         suppressContentEditableWarning
       />
 
-      {linkOpen && (
-        <div className="rte-link-overlay" onClick={() => setLinkOpen(false)}>
-          <div className="rte-link-dialog" onClick={(e) => e.stopPropagation()}>
-            <strong>Ссылка</strong>
-            <p className="field-hint">Выделите текст или вставьте URL</p>
-            <input
-              ref={linkInputRef}
-              className="input"
-              type="url"
-              inputMode="url"
-              autoComplete="off"
-              placeholder="https://…"
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  confirmLink()
-                }
-                if (e.key === 'Escape') setLinkOpen(false)
-              }}
-            />
-            <div className="rte-link-actions">
-              <button type="button" className="btn secondary" onClick={() => setLinkOpen(false)}>
-                Отмена
-              </button>
-              <button type="button" className="btn primary" onClick={confirmLink}>
-                Вставить
-              </button>
-            </div>
+      <GlassModal open={linkOpen} onClose={() => setLinkOpen(false)}>
+        <div className="p-5 flex flex-col gap-3">
+          <strong className="text-sm">Ссылка</strong>
+          <p className="text-xs text-[var(--glass-hint)] m-0">Выделите текст или вставьте URL</p>
+          <input
+            ref={linkInputRef}
+            className="w-full rounded-xl bg-[color-mix(in_srgb,var(--glass-text)_5%,transparent)] px-4 py-3 text-sm ring-1 ring-[var(--glass-border)] focus:outline-none focus:ring-[var(--glass-accent)]"
+            type="url"
+            inputMode="url"
+            autoComplete="off"
+            placeholder="https://…"
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                confirmLink()
+              }
+              if (e.key === 'Escape') setLinkOpen(false)
+            }}
+          />
+          <div className="flex gap-2">
+            <GlassButton variant="secondary" full onClick={() => setLinkOpen(false)}>
+              Отмена
+            </GlassButton>
+            <GlassButton full onClick={confirmLink}>
+              Вставить
+            </GlassButton>
           </div>
         </div>
-      )}
+      </GlassModal>
     </div>
   )
 })

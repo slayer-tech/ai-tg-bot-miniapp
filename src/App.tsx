@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import './App.css'
+import { MegaphoneSimple } from '@phosphor-icons/react'
+import { IslandNav, type TabId } from './components/IslandNav'
 import { AutopilotTab } from './components/AutopilotTab'
 import { CreatePostDialog } from './components/CreatePostDialog'
 import { PlannerTab } from './components/PlannerTab'
 import { PostEditorSheet } from './components/PostEditorSheet'
 import { ProfileTab } from './components/ProfileTab'
 import { SettingsTab } from './components/SettingsTab'
+import {
+  AppSkeleton,
+  EmptyState,
+  ErrorBanner,
+  MeshBackground,
+} from './components/primitives'
 import {
   api,
   channelName,
@@ -19,17 +26,8 @@ import {
   type Settings,
 } from './lib/api'
 
-type Tab = 'planner' | 'autopilot' | 'settings' | 'account'
-
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'planner', label: 'План', icon: '📅' },
-  { id: 'autopilot', label: 'Auto', icon: '🚀' },
-  { id: 'settings', label: 'Настройки', icon: '⚙️' },
-  { id: 'account', label: 'Профиль', icon: '👤' },
-]
-
 export default function App() {
-  const [tab, setTab] = useState<Tab>('planner')
+  const [tab, setTab] = useState<TabId>('planner')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [me, setMe] = useState<Me | null>(null)
@@ -127,38 +125,44 @@ export default function App() {
   const noChannel = !active
 
   return (
-    <div className="app">
-      <header className="header">
+    <div className="relative flex min-h-[100dvh] flex-col pb-[calc(5.5rem+env(safe-area-inset-bottom))]">
+      <MeshBackground />
+
+      <header className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-2xl bg-[color-mix(in_srgb,var(--glass-bg-elevated)_88%,transparent)] px-4 py-3 ring-1 ring-[var(--glass-border)] backdrop-blur-xl">
         <div>
-          <h1>Content Planner</h1>
-          <p className="header-sub">
+          <h1 className="m-0 text-lg font-semibold tracking-tight">Content Planner</h1>
+          <p className="m-0 mt-0.5 text-xs text-[var(--glass-hint)]">
             {active ? channelName(active) : 'Канал не выбран'}
           </p>
         </div>
         {active && (
-          <span className={`conn ${active.is_bot_connected ? 'ok' : 'bad'}`}>
-            {active.is_bot_connected ? '● онлайн' : '● офлайн'}
+          <span
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider ${
+              active.is_bot_connected
+                ? 'text-[var(--glass-success)] bg-[color-mix(in_srgb,var(--glass-success)_12%,transparent)]'
+                : 'text-[var(--glass-danger)] bg-[color-mix(in_srgb,var(--glass-danger)_12%,transparent)]'
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                active.is_bot_connected ? 'bg-[var(--glass-success)] animate-pulse' : 'bg-[var(--glass-danger)]'
+              }`}
+            />
+            {active.is_bot_connected ? 'онлайн' : 'офлайн'}
           </span>
         )}
       </header>
 
-      <main className="content">
-        {error && (
-          <div className="error">
-            {error}
-            <button type="button" className="error-retry" onClick={refresh}>
-              Повторить
-            </button>
-          </div>
-        )}
-        {loading && <div className="loader">Загрузка…</div>}
+      <main className="flex flex-1 flex-col gap-4 px-4 py-4">
+        {error && <ErrorBanner message={error} onRetry={refresh} />}
+        {loading && <AppSkeleton />}
 
         {!loading && noChannel && (
-          <section className="card empty-state">
-            <span className="empty-icon">📢</span>
-            <h2>Подключите канал</h2>
-            <p>В чате с ботом нажмите «Подключить канал» и перешлите пост.</p>
-          </section>
+          <EmptyState
+            icon={MegaphoneSimple}
+            title="Подключите канал"
+            description="В чате с ботом нажмите «Подключить канал» и перешлите пост."
+          />
         )}
 
         {!loading && !noChannel && tab === 'planner' && (
@@ -190,22 +194,7 @@ export default function App() {
         )}
       </main>
 
-      <nav className="tabs">
-        {TABS.map(({ id, label, icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={`tab ${tab === id ? 'active' : ''}`}
-            onClick={() => {
-              setTab(id)
-              WebApp.HapticFeedback?.selectionChanged()
-            }}
-          >
-            <span className="tab-icon">{icon}</span>
-            <span className="tab-label">{label}</span>
-          </button>
-        ))}
-      </nav>
+      <IslandNav active={tab} onChange={setTab} />
 
       {showCreate && (
         <CreatePostDialog

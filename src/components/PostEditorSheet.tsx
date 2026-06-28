@@ -1,6 +1,19 @@
+import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import { api, fetchMediaUrl, humanError, statusLabel, stripHtml, type DraftFull } from '../lib/api'
+import {
+  ArrowLeft,
+  Clock,
+  FloppyDisk,
+  Gear,
+  Image as ImageIcon,
+  LinkSimple,
+  RocketLaunch,
+  Sparkle,
+  TextT,
+  Trash,
+} from '@phosphor-icons/react'
+import { api, fetchMediaUrl, humanError, stripHtml, type DraftFull } from '../lib/api'
 import {
   defaultScheduleMsk,
   formatScheduleMsk,
@@ -8,7 +21,17 @@ import {
 } from '../lib/scheduleMsk'
 import { RichTextEditor, type RichTextEditorHandle } from './RichTextEditor'
 import { MediaAlbumGrid, MediaPickerDialog } from './MediaAlbum'
-import { Btn, SegmentChips, Toggle } from './ui'
+import {
+  GlassBadge,
+  GlassButton,
+  GlassIconButton,
+  GlassSegment,
+  GlassSheet,
+  GlassToggle,
+  Toast,
+} from './primitives'
+import { GlassInput } from './primitives/GlassField'
+import { AppSkeleton } from './primitives/Skeleton'
 import { MAX_DRAFT_PHOTOS, validateInlineButtonUrl } from '../lib/validateUrl'
 
 type Aspect = 'vertical' | 'square' | 'horizontal'
@@ -16,25 +39,30 @@ type Aspect = 'vertical' | 'square' | 'horizontal'
 const AUTODELETE_PRESETS = [0, 1, 24, 48] as const
 const AUTODELETE_MIN = 1
 const AUTODELETE_MAX = 720
-
 const AUTODELETE_OPTS = [
   { value: 0, label: 'Выкл' },
   { value: 1, label: '1 ч' },
   { value: 24, label: '24 ч' },
   { value: 48, label: '48 ч' },
 ]
-
 const ASPECT_OPTS: { value: Aspect; label: string }[] = [
   { value: 'vertical', label: '3:4' },
   { value: 'square', label: '1:1' },
   { value: 'horizontal', label: '16:9' },
 ]
-
-function defaultSchedule(dayIso?: string): string {
-  return defaultScheduleMsk(dayIso)
-}
-
 const PRESET_SET = new Set<number>(AUTODELETE_PRESETS)
+
+function Section({ icon: Icon, title, children }: { icon: typeof ImageIcon; title: string; children: ReactNode }) {
+  return (
+    <section className="py-4 border-b border-[var(--glass-border)] last:border-0">
+      <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--glass-hint)] m-0 mb-3">
+        <Icon size={16} weight="light" />
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+}
 
 export function PostEditorSheet({
   draftId,
@@ -55,7 +83,7 @@ export function PostEditorSheet({
   const [autodeleteCustom, setAutodeleteCustom] = useState('')
   const [silent, setSilent] = useState(false)
   const [pinAfter, setPinAfter] = useState(false)
-  const [scheduleAt, setScheduleAt] = useState(() => defaultSchedule(defaultDay))
+  const [scheduleAt, setScheduleAt] = useState(() => defaultScheduleMsk(defaultDay))
   const [mediaItems, setMediaItems] = useState<{ src: string; index: number }[]>([])
   const mediaBlobsRef = useRef<string[]>([])
   const [picker, setPicker] = useState<'remove' | 'ai-edit' | null>(null)
@@ -77,11 +105,7 @@ export function PostEditorSheet({
 
   const loadMediaItems = async (d: DraftFull) => {
     revokeMediaBlobs()
-    const paths = d.media_urls?.length
-      ? d.media_urls
-      : d.media_url
-        ? [d.media_url]
-        : []
+    const paths = d.media_urls?.length ? d.media_urls : d.media_url ? [d.media_url] : []
     const loaded: { src: string; index: number }[] = []
     for (let i = 0; i < paths.length; i++) {
       const src = await fetchMediaUrl(paths[i])
@@ -100,25 +124,17 @@ export function PostEditorSheet({
     setBtnText(d.inline_button_text || '')
     setAutodelete(d.autodelete_hours ?? 0)
     setAutodeleteCustom(
-      d.autodelete_hours && !PRESET_SET.has(d.autodelete_hours)
-        ? String(d.autodelete_hours)
-        : '',
+      d.autodelete_hours && !PRESET_SET.has(d.autodelete_hours) ? String(d.autodelete_hours) : '',
     )
     setPinAfter(d.pin_after_publish)
     setSilent(d.disable_notification)
     setBtnUrlError(null)
-    if (d.scheduled_at) {
-      setScheduleAt(scheduleFromIso(d.scheduled_at))
-    }
+    if (d.scheduled_at) setScheduleAt(scheduleFromIso(d.scheduled_at))
     await loadMediaItems(d)
   }
 
-  const load = async () => {
-    await applyDraft(await api.getDraft(draftId))
-  }
-
   useEffect(() => {
-    load().catch((e) => setMsg(humanError(e)))
+    api.getDraft(draftId).then(applyDraft).catch((e) => setMsg(humanError(e)))
     return () => revokeMediaBlobs()
   }, [draftId]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -180,10 +196,7 @@ export function PostEditorSheet({
     setAutodelete(h)
     if (PRESET_SET.has(h)) setAutodeleteCustom('')
     run(async () => {
-      const d = await api.patchDraft(draftId, {
-        text: currentText(),
-        autodelete_hours: h || 0,
-      })
+      const d = await api.patchDraft(draftId, { text: currentText(), autodelete_hours: h || 0 })
       await applyDraft(d)
     }, h ? `Автоудаление: ${h} ч` : 'Автоудаление выкл')
   }
@@ -219,7 +232,6 @@ export function PostEditorSheet({
   }
 
   const refreshMedia = async (d: DraftFull) => applyDraft(d)
-
   const mediaCount = draft?.media_count ?? mediaItems.length
   const maxMedia = draft?.max_media ?? MAX_DRAFT_PHOTOS
   const canAddMedia = mediaCount < maxMedia
@@ -230,49 +242,24 @@ export function PostEditorSheet({
   const runAiEditAt = (index: number) =>
     run(async () => refreshMedia(await api.aiImage(draftId, 'uniqueify', 'square', undefined, index)), 'ИИ доработал')
 
-  const handleRemoveClick = () => {
-    if (mediaCount <= 1) {
-      if (confirm('Убрать фото?')) removeMediaAt(0)
-      return
-    }
-    setPicker('remove')
-  }
-
-  const handleAiEditClick = () => {
-    if (mediaCount <= 1) {
-      runAiEditAt(0)
-      return
-    }
-    setPicker('ai-edit')
-  }
-
-  const handlePhotoClick = (index: number) => {
-    if (confirm(`Убрать фото ${index + 1}?`)) removeMediaAt(index)
-  }
-
   const uploadFiles = (files: FileList | null) => {
     if (!files?.length) return
-    const remaining = maxMedia - mediaCount
-    const batch = Array.from(files).slice(0, remaining)
-    if (batch.length < files.length) {
-      setMsg(`Максимум ${maxMedia} фото — загружено ${batch.length}`)
-    }
+    const batch = Array.from(files).slice(0, maxMedia - mediaCount)
     run(async () => {
       let d = draft!
-      for (const f of batch) {
-        d = await api.uploadDraftMedia(draftId, f)
-      }
+      for (const f of batch) d = await api.uploadDraftMedia(draftId, f)
       await refreshMedia(d)
     }, batch.length > 1 ? `Загружено ${batch.length} фото` : 'Загружено')
   }
 
   if (!draft) {
     return (
-      <div className="sheet-overlay">
-        <div className="sheet">
-          <p className="loader">{msg || 'Загрузка…'}</p>
+      <GlassSheet open onClose={onClose}>
+        <div className="p-6">
+          <AppSkeleton />
+          {msg && <p className="text-sm text-[var(--glass-danger)]">{msg}</p>}
         </div>
-      </div>
+      </GlassSheet>
     )
   }
 
@@ -280,406 +267,172 @@ export function PostEditorSheet({
   const published = draft.is_published
 
   return (
-    <div className="sheet-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet">
-        <header className="sheet-head">
-          <button type="button" className="icon-btn" onClick={onClose}>←</button>
-          <div>
-            <strong>{published ? 'Опубликованный пост' : 'Редактор поста'}</strong>
-            <span className="sheet-status">{statusLabel(draft.status)}</span>
+    <GlassSheet open onClose={onClose}>
+      <header className="flex items-center gap-2 border-b border-[var(--glass-border)] px-4 py-3 shrink-0">
+        <GlassIconButton label="Назад" onClick={onClose}>
+          <ArrowLeft size={18} weight="light" />
+        </GlassIconButton>
+        <div className="flex-1 min-w-0">
+          <strong className="text-sm block truncate">{published ? 'Опубликованный пост' : 'Редактор'}</strong>
+          <GlassBadge status={draft.status} />
+        </div>
+        <GlassIconButton
+          label="Сохранить"
+          disabled={busy || !editable}
+          onClick={() =>
+            run(async () => {
+              await api.patchDraft(draftId, {
+                text: currentText(),
+                autodelete_hours: autodelete || 0,
+                pin_after_publish: pinAfter,
+                disable_notification: silent,
+                ...(btnUrl.trim()
+                  ? { inline_button_url: btnUrl.trim(), inline_button_text: btnText.trim() || '/auto' }
+                  : { clear_button: true }),
+              }).then(applyDraft)
+            }, 'Сохранено')
+          }
+        >
+          <FloppyDisk size={18} weight="light" />
+        </GlassIconButton>
+      </header>
+
+      {msg && <Toast>{msg}</Toast>}
+
+      <div className="flex-1 overflow-y-auto px-4 pb-32">
+        {published && (
+          <div className="mt-3 rounded-xl bg-[color-mix(in_srgb,var(--glass-success)_12%,transparent)] px-4 py-3 text-sm text-[var(--glass-success)] ring-1 ring-[color-mix(in_srgb,var(--glass-success)_25%,transparent)]">
+            Пост в канале. Можно настроить автоудаление или удалить.
           </div>
-          <button
-            type="button"
-            className="icon-btn"
-            disabled={busy || !editable}
-            onClick={() =>
-              run(async () => {
-                await api.patchDraft(draftId, {
-                  text: currentText(),
-                  autodelete_hours: autodelete || 0,
-                  pin_after_publish: pinAfter,
-                  disable_notification: silent,
-                  ...(btnUrl.trim()
-                    ? { inline_button_url: btnUrl.trim(), inline_button_text: btnText.trim() || '/auto' }
-                    : { clear_button: true }),
-                }).then(applyDraft)
-              }, 'Сохранено')
-            }
-          >
-            💾
-          </button>
-        </header>
+        )}
 
-        {msg && <div className="toast">{msg}</div>}
-
-        <div className="sheet-body">
-          {published && (
-            <section className="editor-section published-banner">
-              ✅ Пост в канале. Можно настроить автоудаление или удалить.
-            </section>
-          )}
-
-          {/* Image */}
-          {!published && (
-            <section className="editor-section">
-              <h3>🖼 Фото</h3>
-              <p className="field-hint">
-                До {maxMedia} фото в альбоме (как в Telegram). Нажмите на фото, чтобы убрать.
-              </p>
-              {mediaItems.length > 0 ? (
-                <>
-                  <MediaAlbumGrid
-                    items={mediaItems}
-                    editable={!busy}
-                    onPhotoClick={handlePhotoClick}
-                  />
-                  <div className="media-actions">
-                    <Btn
-                      variant="secondary"
-                      disabled={busy || !canAddMedia}
-                      onClick={() => fileRef.current?.click()}
-                    >
-                      ➕ Добавить
-                    </Btn>
-                    <Btn variant="secondary" disabled={busy} onClick={handleRemoveClick}>
-                      Убрать
-                    </Btn>
-                    <Btn disabled={busy} onClick={handleAiEditClick}>
-                      ✨ ИИ-редакт
-                    </Btn>
-                  </div>
-                </>
-              ) : (
-                <div className="media-empty">
-                  <Btn variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()} full>
-                    📷 Добавить фото
-                  </Btn>
-                  <p className="field-hint">Формат для ИИ-генерации:</p>
-                  <SegmentChips options={ASPECT_OPTS} value={aspect} onChange={setAspect} disabled={busy} />
-                  <Btn
-                    disabled={busy}
-                    onClick={() =>
-                      run(
-                        async () =>
-                          refreshMedia(
-                            await api.aiImage(draftId, 'generate', aspect, aiPrompt || text),
-                          ),
-                        'Сгенерировано',
-                      )
-                    }
-                    full
-                  >
-                    🎨 Сгенерировать ИИ
-                  </Btn>
-                </div>
-              )}
-              {mediaItems.length > 0 && canAddMedia && (
-                <>
-                  <p className="field-hint">ИИ-генерация добавит ещё одно фото:</p>
-                  <SegmentChips options={ASPECT_OPTS} value={aspect} onChange={setAspect} disabled={busy} />
-                  <Btn
-                    disabled={busy || !canAddMedia}
-                    onClick={() =>
-                      run(
-                        async () =>
-                          refreshMedia(
-                            await api.aiImage(draftId, 'generate', aspect, aiPrompt || text),
-                          ),
-                        'Сгенерировано',
-                      )
-                    }
-                    full
-                  >
-                    🎨 Сгенерировать ИИ
-                  </Btn>
-                </>
-              )}
-              <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                multiple
-                hidden
-                onChange={(e) => {
-                  uploadFiles(e.target.files)
-                  e.target.value = ''
-                }}
-              />
-            </section>
-          )}
-
-          {published && mediaItems.length > 0 && (
-            <section className="editor-section">
-              <h3>🖼 Фото</h3>
-              <MediaAlbumGrid items={mediaItems} editable={false} onPhotoClick={() => {}} />
-            </section>
-          )}
-
-          {/* Text */}
-          <section className="editor-section">
-            <h3>📝 Текст</h3>
-            {editable ? (
+        {!published && (
+          <Section icon={ImageIcon} title="Фото">
+            <p className="text-xs text-[var(--glass-hint)] mb-3">До {maxMedia} фото в альбоме</p>
+            {mediaItems.length > 0 ? (
               <>
-                <RichTextEditor
-                  ref={editorRef}
-                  value={text}
-                  onChange={setText}
-                  placeholder="Текст поста…"
-                  rows={6}
-                  disabled={busy}
+                <MediaAlbumGrid
+                  items={mediaItems}
+                  editable={!busy}
+                  onPhotoClick={(i) => { if (confirm(`Убрать фото ${i + 1}?`)) removeMediaAt(i) }}
                 />
-                <div className="ai-row">
-                  <Btn variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'shorten'); await applyDraft(d); setText(d.text) }, 'Короче')}>
-                    Короче
-                  </Btn>
-                  <Btn variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'humor'); await applyDraft(d); setText(d.text) }, 'Готово')}>
-                    Юмор
-                  </Btn>
-                  <Btn variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'rewrite'); await applyDraft(d); setText(d.text) }, 'Переписано')}>
-                    Переписать
-                  </Btn>
-                  <Btn variant="secondary" disabled={busy} onClick={() => setShowAiWrite((v) => !v)}>
-                    ✨ ИИ написать
-                  </Btn>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <GlassButton variant="secondary" disabled={busy || !canAddMedia} onClick={() => fileRef.current?.click()}>
+                    Добавить
+                  </GlassButton>
+                  <GlassButton variant="secondary" disabled={busy} onClick={() => (mediaCount <= 1 ? confirm('Убрать фото?') && removeMediaAt(0) : setPicker('remove'))}>
+                    Убрать
+                  </GlassButton>
+                  <GlassButton disabled={busy} onClick={() => (mediaCount <= 1 ? runAiEditAt(0) : setPicker('ai-edit'))} trailing={<Sparkle size={14} weight="fill" />}>
+                    ИИ-редакт
+                  </GlassButton>
                 </div>
-                {showAiWrite && (
-                  <div className="ai-write">
-                    <input className="input" placeholder="Идея для поста…" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} />
-                    <Btn
-                      disabled={busy || !aiPrompt.trim()}
-                      onClick={() =>
-                        run(async () => {
-                          const d = await api.aiText(draftId, 'write', aiPrompt)
-                          await applyDraft(d)
-                          setText(d.text)
-                          setShowAiWrite(false)
-                        }, 'Пост готов')
-                      }
-                    >
-                      Сгенерировать
-                    </Btn>
-                  </div>
-                )}
               </>
             ) : (
-              <p className="preview-text">{stripHtml(draft.footer_preview)}</p>
-            )}
-          </section>
-
-          {draft.footer_preview.includes('подпись канала') && (
-            <section className="editor-section footer-preview">
-              <h3>Подпись канала</h3>
-              <div
-                className="footer-render"
-                dangerouslySetInnerHTML={{
-                  __html: draft.footer_preview.split('— подпись канала —')[1] || '',
-                }}
-              />
-            </section>
-          )}
-
-          {/* Inline button */}
-          {editable && (
-            <section className="editor-section">
-              <h3>🔗 Кнопка под постом</h3>
-              {(draft.inline_button_text && draft.inline_button_url) && (
-                <div className="button-preview">
-                  <span className="badge ok">{draft.inline_button_text}</span>
-                  <span className="field-hint">{draft.inline_button_url}</span>
-                </div>
-              )}
-              <input
-                className={`input${btnUrlError ? ' input-err' : ''}`}
-                placeholder="URL — https://… или @channel"
-                value={btnUrl}
-                onChange={(e) => {
-                  setBtnUrl(e.target.value)
-                  if (btnUrlError) setBtnUrlError(null)
-                }}
-                onBlur={() => btnUrl.trim() && checkBtnUrl()}
-              />
-              {btnUrlError && <p className="field-hint err-hint">{btnUrlError}</p>}
-              <input className="input" placeholder="Текст кнопки" value={btnText} onChange={(e) => setBtnText(e.target.value)} />
-              <div className="ai-row">
-                <Btn variant="secondary" disabled={busy || !btnUrl.trim()} onClick={() => saveButton(false)} full>
-                  Сохранить кнопку
-                </Btn>
-                <Btn disabled={busy || !btnUrl.trim()} onClick={() => saveButton(true)} full>
-                  ✨ ИИ подберёт текст
-                </Btn>
-              </div>
-              {(btnUrl || draft.inline_button_url) && (
-                <Btn
-                  variant="ghost"
-                  disabled={busy}
-                  onClick={() =>
-                    run(async () => {
-                      const d = await api.patchDraft(draftId, {
-                        text: currentText(),
-                        clear_button: true,
-                      })
-                      await applyDraft(d)
-                      setBtnUrl('')
-                      setBtnText('')
-                    }, 'Кнопка убрана')
-                  }
-                  full
-                >
-                  Убрать кнопку
-                </Btn>
-              )}
-            </section>
-          )}
-
-          {/* More options */}
-          <section className="editor-section">
-            <h3>⚙️ Дополнительно</h3>
-            <p className="field-hint">⏱ Автоудаление из канала после публикации</p>
-            <SegmentChips
-              options={AUTODELETE_OPTS}
-              value={autodeleteChipValue}
-              onChange={(v) => saveAutodelete(v)}
-              disabled={busy}
-            />
-            <div className="inline-add">
-              <input
-                className="input"
-                type="number"
-                min={AUTODELETE_MIN}
-                max={AUTODELETE_MAX}
-                inputMode="numeric"
-                placeholder="Своё время, ч"
-                value={autodeleteCustom}
-                disabled={busy}
-                onChange={(e) => setAutodeleteCustom(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    applyCustomAutodelete()
-                  }
-                }}
-              />
-              <Btn
-                variant="secondary"
-                disabled={busy || !autodeleteCustom.trim()}
-                onClick={applyCustomAutodelete}
-              >
-                OK
-              </Btn>
-            </div>
-            {autodelete > 0 && !PRESET_SET.has(autodelete) && (
-              <p className="field-hint">Сейчас: удаление через {autodelete} ч</p>
-            )}
-            <p className="field-hint">От 1 до 720 часов (30 суток)</p>
-            {editable && (
               <>
-                <Toggle
-                  label="📌 Закрепить после публикации"
-                  checked={pinAfter}
-                  onChange={(v) => {
-                    setPinAfter(v)
-                    run(async () => {
-                      const d = await api.patchDraft(draftId, {
-                        text: currentText(),
-                        pin_after_publish: v,
-                      })
-                      await applyDraft(d)
-                    })
-                  }}
-                />
-                {pinAfter && (
-                  <p className="field-hint">
-                    Нужно право бота «Редактирование сообщений» в настройках канала.
-                  </p>
-                )}
-                <Toggle
-                  label="🔕 Без звука (тихая публикация)"
-                  checked={silent}
-                  onChange={(v) => {
-                    setSilent(v)
-                    run(async () => {
-                      const d = await api.patchDraft(draftId, {
-                        text: currentText(),
-                        disable_notification: v,
-                      })
-                      await applyDraft(d)
-                    })
-                  }}
-                />
+                <GlassButton variant="secondary" disabled={busy} full onClick={() => fileRef.current?.click()}>
+                  Добавить фото
+                </GlassButton>
+                <p className="text-xs text-[var(--glass-hint)] mt-3 mb-2">Формат для ИИ:</p>
+                <GlassSegment options={ASPECT_OPTS} value={aspect} onChange={setAspect} disabled={busy} />
+                <GlassButton
+                  className="mt-3"
+                  disabled={busy}
+                  full
+                  trailing={<Sparkle size={16} weight="fill" />}
+                  onClick={() => run(async () => refreshMedia(await api.aiImage(draftId, 'generate', aspect, aiPrompt || text)), 'Сгенерировано')}
+                >
+                  Сгенерировать ИИ
+                </GlassButton>
               </>
             )}
-          </section>
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => { uploadFiles(e.target.files); e.target.value = '' }} />
+          </Section>
+        )}
 
-          {/* Publish */}
-          {editable && (
-            <section className="editor-section">
-              <h3>🚀 Публикация</h3>
-              <input className="input" placeholder="ДД.ММ.ГГГГ ЧЧ:ММ (Москва)" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
-              <p className="field-hint">Московское время (МСК). Джиттер ±7–23 мин если включён.</p>
-              <div className="ai-row">
-                <Btn variant="secondary" disabled={busy} onClick={() => setScheduleAt(formatScheduleMsk(new Date(Date.now() + 3600000)))}>
-                  +1 ч
-                </Btn>
-                <Btn variant="secondary" disabled={busy} onClick={() => setScheduleAt(formatScheduleMsk(new Date(Date.now() + 3 * 3600000)))}>
-                  +3 ч
-                </Btn>
-                <Btn variant="secondary" disabled={busy} onClick={() => setScheduleAt(defaultScheduleMsk())}>
-                  Завтра 12:00
-                </Btn>
+        {published && mediaItems.length > 0 && (
+          <Section icon={ImageIcon} title="Фото">
+            <MediaAlbumGrid items={mediaItems} editable={false} onPhotoClick={() => {}} />
+          </Section>
+        )}
+
+        <Section icon={TextT} title="Текст">
+          {editable ? (
+            <>
+              <RichTextEditor ref={editorRef} value={text} onChange={setText} placeholder="Текст поста…" rows={6} disabled={busy} />
+              <div className="flex flex-wrap gap-2 mt-3">
+                <GlassButton variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'shorten'); await applyDraft(d); setText(d.text) }, 'Короче')}>Короче</GlassButton>
+                <GlassButton variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'humor'); await applyDraft(d); setText(d.text) }, 'Готово')}>Юмор</GlassButton>
+                <GlassButton variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'rewrite'); await applyDraft(d); setText(d.text) }, 'Переписано')}>Переписать</GlassButton>
+                <GlassButton variant="secondary" disabled={busy} onClick={() => setShowAiWrite((v) => !v)} trailing={<Sparkle size={14} weight="fill" />}>ИИ написать</GlassButton>
               </div>
-              <div className="publish-row">
-                <Btn
-                  disabled={busy || !canPublish}
-                  onClick={() =>
-                    run(async () => {
-                      await patchForPublish()
-                      await api.scheduleDraft(draftId, scheduleAt)
-                      onClose()
-                    }, 'Запланировано')
-                  }
-                  full
-                >
-                  🕒 В расписание
-                </Btn>
-                <Btn
-                  variant="secondary"
-                  disabled={busy || !canPublish}
-                  onClick={() =>
-                    run(async () => {
-                      await patchForPublish()
-                      const d = await api.publishDraft(draftId)
-                      setMsg(d.warning || 'Опубликовано')
-                      WebApp.HapticFeedback?.notificationOccurred('success')
-                      onClose()
-                    })
-                  }
-                  full
-                >
-                  🚀 Сейчас
-                </Btn>
-              </div>
-              {!canPublish && (
-                <p className="field-hint err-hint">Добавьте текст или картинку для публикации</p>
+              {showAiWrite && (
+                <div className="mt-3 flex flex-col gap-2">
+                  <GlassInput placeholder="Идея для поста…" value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} />
+                  <GlassButton disabled={busy || !aiPrompt.trim()} onClick={() => run(async () => { const d = await api.aiText(draftId, 'write', aiPrompt); await applyDraft(d); setText(d.text); setShowAiWrite(false) }, 'Пост готов')}>
+                    Сгенерировать
+                  </GlassButton>
+                </div>
               )}
-            </section>
+            </>
+          ) : (
+            <p className="text-sm leading-relaxed m-0">{stripHtml(draft.footer_preview)}</p>
           )}
+        </Section>
 
-          <section className="editor-section danger-zone">
-            <Btn
-              variant="danger"
-              disabled={busy}
-              onClick={() => {
-                if (!confirm('Удалить пост?')) return
-                run(async () => {
-                  await api.deleteDraft(draftId)
-                  onClose()
-                })
-              }}
-              full
-            >
-              🗑 Удалить
-            </Btn>
-          </section>
+        {editable && (
+          <Section icon={LinkSimple} title="Кнопка под постом">
+            <GlassInput className="mb-2" placeholder="URL — https://… или @channel" value={btnUrl} error={!!btnUrlError} onChange={(e) => { setBtnUrl(e.target.value); if (btnUrlError) setBtnUrlError(null) }} onBlur={() => btnUrl.trim() && checkBtnUrl()} />
+            {btnUrlError && <p className="text-xs text-[var(--glass-danger)] mb-2">{btnUrlError}</p>}
+            <GlassInput className="mb-3" placeholder="Текст кнопки" value={btnText} onChange={(e) => setBtnText(e.target.value)} />
+            <div className="flex flex-col gap-2">
+              <GlassButton variant="secondary" disabled={busy || !btnUrl.trim()} full onClick={() => saveButton(false)}>Сохранить кнопку</GlassButton>
+              <GlassButton disabled={busy || !btnUrl.trim()} full trailing={<Sparkle size={14} weight="fill" />} onClick={() => saveButton(true)}>ИИ подберёт текст</GlassButton>
+              {(btnUrl || draft.inline_button_url) && (
+                <GlassButton variant="ghost" disabled={busy} full onClick={() => run(async () => { const d = await api.patchDraft(draftId, { text: currentText(), clear_button: true }); await applyDraft(d); setBtnUrl(''); setBtnText('') }, 'Кнопка убрана')}>Убрать кнопку</GlassButton>
+              )}
+            </div>
+          </Section>
+        )}
+
+        <Section icon={Gear} title="Дополнительно">
+          <p className="text-xs text-[var(--glass-hint)] mb-2">Автоудаление из канала</p>
+          <GlassSegment options={AUTODELETE_OPTS} value={autodeleteChipValue} onChange={saveAutodelete} disabled={busy} />
+          <div className="flex gap-2 mt-3">
+            <GlassInput type="number" min={AUTODELETE_MIN} max={AUTODELETE_MAX} placeholder="Своё, ч" value={autodeleteCustom} disabled={busy} onChange={(e) => setAutodeleteCustom(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && applyCustomAutodelete()} />
+            <GlassButton variant="secondary" disabled={busy || !autodeleteCustom.trim()} onClick={applyCustomAutodelete}>OK</GlassButton>
+          </div>
+          {editable && (
+            <>
+              <GlassToggle label="Закрепить после публикации" checked={pinAfter} onChange={(v) => { setPinAfter(v); run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), pin_after_publish: v }))) }} />
+              <GlassToggle label="Без звука" checked={silent} onChange={(v) => { setSilent(v); run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), disable_notification: v }))) }} />
+            </>
+          )}
+        </Section>
+
+        {editable && (
+          <Section icon={RocketLaunch} title="Публикация">
+            <GlassInput placeholder="ДД.ММ.ГГГГ ЧЧ:ММ (Москва)" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)} />
+            <p className="text-xs text-[var(--glass-hint)] my-2">Московское время. Джиттер ±7–23 мин если включён.</p>
+            <div className="flex flex-wrap gap-2 mb-3">
+              <GlassButton variant="secondary" disabled={busy} onClick={() => setScheduleAt(formatScheduleMsk(new Date(Date.now() + 3600000)))}>+1 ч</GlassButton>
+              <GlassButton variant="secondary" disabled={busy} onClick={() => setScheduleAt(formatScheduleMsk(new Date(Date.now() + 3 * 3600000)))}>+3 ч</GlassButton>
+              <GlassButton variant="secondary" disabled={busy} onClick={() => setScheduleAt(defaultScheduleMsk())}>Завтра 12:00</GlassButton>
+            </div>
+            <GlassButton disabled={busy || !canPublish} full trailing={<Clock size={16} weight="light" />} onClick={() => run(async () => { await patchForPublish(); await api.scheduleDraft(draftId, scheduleAt); onClose() }, 'Запланировано')}>
+              В расписание
+            </GlassButton>
+            <GlassButton className="mt-2" variant="secondary" disabled={busy || !canPublish} full trailing={<RocketLaunch size={16} weight="light" />} onClick={() => run(async () => { await patchForPublish(); const d = await api.publishDraft(draftId); setMsg(d.warning || 'Опубликовано'); WebApp.HapticFeedback?.notificationOccurred('success'); onClose() })}>
+              Сейчас
+            </GlassButton>
+            {!canPublish && <p className="text-xs text-[var(--glass-danger)] mt-2">Добавьте текст или картинку</p>}
+          </Section>
+        )}
+
+        <div className="py-4">
+          <GlassButton variant="danger" disabled={busy} full trailing={<Trash size={16} weight="light" />} onClick={() => { if (!confirm('Удалить пост?')) return; run(async () => { await api.deleteDraft(draftId); onClose() }) }}>
+            Удалить
+          </GlassButton>
         </div>
       </div>
 
@@ -687,14 +440,10 @@ export function PostEditorSheet({
         <MediaPickerDialog
           title={picker === 'remove' ? 'Какое фото убрать?' : 'Какое фото отредактировать ИИ?'}
           count={mediaCount}
-          onPick={(index) => {
-            setPicker(null)
-            if (picker === 'remove') removeMediaAt(index)
-            else runAiEditAt(index)
-          }}
+          onPick={(index) => { setPicker(null); picker === 'remove' ? removeMediaAt(index) : runAiEditAt(index) }}
           onCancel={() => setPicker(null)}
         />
       )}
-    </div>
+    </GlassSheet>
   )
 }

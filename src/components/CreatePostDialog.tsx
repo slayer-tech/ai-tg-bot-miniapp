@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
+import { ArrowLeft, Sparkle } from '@phosphor-icons/react'
 import { api, humanError } from '../lib/api'
-import { Btn } from './ui'
+import { GlassButton, GlassIconButton, GlassModal, Toast } from './primitives'
+import { GlassTextarea } from './primitives/GlassField'
 
 type Mode = 'pick' | 'idea' | 'reference'
 
@@ -37,39 +39,41 @@ export function CreatePostDialog({
   }
 
   return (
-    <div className="sheet-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet sheet-sm">
-        <header className="sheet-head">
-          <button type="button" className="icon-btn" onClick={onClose}>←</button>
-          <strong>Новый пост</strong>
-          <span />
-        </header>
+    <GlassModal open onClose={onClose}>
+      <header className="flex items-center gap-3 border-b border-[var(--glass-border)] px-4 py-3">
+        <GlassIconButton label="Назад" onClick={onClose}>
+          <ArrowLeft size={18} weight="light" />
+        </GlassIconButton>
+        <strong className="text-sm flex-1">Новый пост</strong>
+      </header>
 
-        {err && <div className="toast err">{err}</div>}
+      {err && <Toast error>{err}</Toast>}
 
+      <div className="p-4 flex flex-col gap-3 max-h-[70dvh] overflow-y-auto">
         {mode === 'pick' && (
-          <div className="create-options">
-            <p className="create-hint">
+          <>
+            <p className="text-xs text-[var(--glass-hint)] m-0">
               {defaultDay
                 ? `День: ${new Date(defaultDay + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
                 : 'Как создаём пост?'}
             </p>
-            <Btn disabled={busy} full onClick={() => run(async () => (await api.generateTrendDraft()).id)}>
-              🤖 Из трендов
-            </Btn>
-            <Btn disabled={busy} full onClick={() => setMode('idea')}>
-              💡 По идее
-            </Btn>
-            <Btn variant="secondary" disabled={busy} full onClick={() => setMode('reference')}>
-              📎 По референсу
-            </Btn>
-            <Btn variant="secondary" disabled={busy} full onClick={() => run(async () => (await api.createDraft('')).id)}>
-              ✍️ Ручной пост
-            </Btn>
-            <Btn
+            <GlassButton disabled={busy} full onClick={() => run(async () => (await api.generateTrendDraft()).id)}>
+              Из трендов
+            </GlassButton>
+            <GlassButton disabled={busy} full onClick={() => setMode('idea')}>
+              По идее
+            </GlassButton>
+            <GlassButton variant="secondary" disabled={busy} full onClick={() => setMode('reference')}>
+              По референсу
+            </GlassButton>
+            <GlassButton variant="secondary" disabled={busy} full onClick={() => run(async () => (await api.createDraft('')).id)}>
+              Ручной пост
+            </GlassButton>
+            <GlassButton
               variant="secondary"
               disabled={busy}
               full
+              trailing={<Sparkle size={16} weight="fill" />}
               onClick={() =>
                 run(async () => {
                   const d = await api.createDraft('')
@@ -77,67 +81,57 @@ export function CreatePostDialog({
                 })
               }
             >
-              ✨ ИИ сам придумает
-            </Btn>
-          </div>
+              ИИ сам придумает
+            </GlassButton>
+          </>
         )}
 
         {mode === 'idea' && (
-          <div className="create-options">
-            <textarea
-              className="textarea"
+          <>
+            <GlassTextarea
               rows={4}
               placeholder="О чём пост? Например: 5 привычек для продуктивности…"
               value={idea}
               onChange={(e) => setIdea(e.target.value)}
             />
-            <Btn
+            <GlassButton
               disabled={busy || idea.trim().length < 3}
               full
               onClick={() => run(async () => (await api.generateIdeaDraft(idea.trim())).id)}
             >
               {busy ? 'Генерация…' : 'Сгенерировать текст'}
-            </Btn>
-            <Btn variant="ghost" disabled={busy} onClick={() => setMode('pick')}>
+            </GlassButton>
+            <GlassButton variant="ghost" disabled={busy} onClick={() => setMode('pick')}>
               Назад
-            </Btn>
-          </div>
+            </GlassButton>
+          </>
         )}
 
         {mode === 'reference' && (
-          <div className="create-options">
-            <textarea
-              className="textarea"
+          <>
+            <GlassTextarea
               rows={5}
               placeholder="Вставьте текст референс-поста — ИИ перепишет под ваш канал…"
               value={refText}
               onChange={(e) => setRefText(e.target.value)}
             />
-            <Btn variant="secondary" disabled={busy} full onClick={() => fileRef.current?.click()}>
-              {refFile ? `📷 ${refFile.name}` : '📷 Прикрепить картинку (опционально)'}
-            </Btn>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={(e) => setRefFile(e.target.files?.[0] || null)}
-            />
-            <Btn
+            <GlassButton variant="secondary" disabled={busy} full onClick={() => fileRef.current?.click()}>
+              {refFile ? refFile.name : 'Прикрепить картинку (опционально)'}
+            </GlassButton>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => setRefFile(e.target.files?.[0] || null)} />
+            <GlassButton
               disabled={busy || refText.trim().length < 10}
               full
-              onClick={() =>
-                run(async () => (await api.generateReferenceDraft(refText.trim(), refFile || undefined)).id)
-              }
+              onClick={() => run(async () => (await api.generateReferenceDraft(refText.trim(), refFile || undefined)).id)}
             >
               {busy ? 'Обработка…' : 'Переписать по референсу'}
-            </Btn>
-            <Btn variant="ghost" disabled={busy} onClick={() => setMode('pick')}>
+            </GlassButton>
+            <GlassButton variant="ghost" disabled={busy} onClick={() => setMode('pick')}>
               Назад
-            </Btn>
-          </div>
+            </GlassButton>
+          </>
         )}
       </div>
-    </div>
+    </GlassModal>
   )
 }

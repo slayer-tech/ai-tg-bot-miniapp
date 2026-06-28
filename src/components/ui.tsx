@@ -1,102 +1,42 @@
+/** @deprecated Use primitives directly */
 import type { ReactNode } from 'react'
+import {
+  GlassCard,
+  GlassButton,
+  GlassField,
+  GlassSegment,
+  GlassToggle,
+} from './primitives'
 
-export function Card({
-  title,
-  children,
-  action,
-}: {
-  title?: string
-  children: ReactNode
-  action?: ReactNode
-}) {
-  return (
-    <section className="card">
-      {(title || action) && (
-        <div className="card-head">
-          {title && <h2>{title}</h2>}
-          {action}
-        </div>
-      )}
-      {children}
-    </section>
-  )
+export function Card(props: { title?: string; children: ReactNode; action?: ReactNode }) {
+  return <GlassCard {...props} />
 }
 
-export function Btn({
-  children,
-  onClick,
-  variant = 'primary',
-  disabled,
-  full,
-}: {
+export function Btn(props: {
   children: ReactNode
   onClick?: () => void
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   disabled?: boolean
   full?: boolean
 }) {
-  return (
-    <button
-      type="button"
-      className={`btn btn-${variant}${full ? ' btn-full' : ''}`}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
-    </button>
-  )
+  return <GlassButton {...props} />
 }
 
-export function Toggle({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean
-  onChange: (v: boolean) => void
-  label: string
-}) {
-  return (
-    <label className="toggle-row">
-      <span>{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        className={`toggle ${checked ? 'on' : ''}`}
-        onClick={() => onChange(!checked)}
-      >
-        <span className="toggle-knob" />
-      </button>
-    </label>
-  )
+export function Toggle(props: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return <GlassToggle {...props} />
 }
 
-export function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string
-  hint?: string
-  children: ReactNode
-}) {
-  return (
-    <div className="field">
-      <label className="field-label">{label}</label>
-      {children}
-      {hint && <p className="field-hint">{hint}</p>}
-    </div>
-  )
+export function Field(props: { label: string; hint?: string; children: ReactNode }) {
+  return <GlassField {...props} />
 }
 
 export function StatGrid({ items }: { items: { label: string; value: string | number }[] }) {
   return (
-    <div className="stat-grid">
+    <div className="grid grid-cols-2 gap-4">
       {items.map((it) => (
-        <div key={it.label} className="stat">
-          <span className="stat-value">{it.value}</span>
-          <span className="stat-label">{it.label}</span>
+        <div key={it.label} className="flex flex-col gap-1">
+          <span className="font-mono text-2xl font-semibold tracking-tight">{it.value}</span>
+          <span className="text-xs text-[var(--glass-hint)]">{it.label}</span>
         </div>
       ))}
     </div>
@@ -104,33 +44,16 @@ export function StatGrid({ items }: { items: { label: string; value: string | nu
 }
 
 export function Empty({ text }: { text: string }) {
-  return <p className="empty">{text}</p>
+  return <p className="text-sm text-[var(--glass-hint)] text-center py-4 m-0">{text}</p>
 }
 
-export function SegmentChips<T extends string | number>({
-  options,
-  value,
-  onChange,
-  disabled,
-}: {
+export function SegmentChips<T extends string | number>(props: {
   options: { value: T; label: string }[]
   value: T
   onChange: (v: T) => void
   disabled?: boolean
 }) {
-  return (
-    <div className="segment-chips">
-      {options.map((o) => (
-        <button
-          key={String(o.value)}
-          type="button"
-          className={`segment-chip${value === o.value ? ' active' : ''}`}
-          disabled={disabled}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  )
+  return <GlassSegment {...props} />
 }
+
+export { statusLabel } from './primitives/GlassBadge'

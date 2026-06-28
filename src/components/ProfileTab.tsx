@@ -1,5 +1,5 @@
 import type { Me } from '../lib/api'
-import { Btn, Card, StatGrid } from './ui'
+import { GlassButton, GlassCard, GlassShell } from './primitives'
 
 export function ProfileTab({
   me,
@@ -11,32 +11,43 @@ export function ProfileTab({
   onRefresh: () => void
 }) {
   return (
-    <>
-      <Card title="Аккаунт">
-        <div className="profile-row">
-          <div className="avatar">{me.username?.[0]?.toUpperCase() || 'U'}</div>
+    <div className="flex flex-col gap-4">
+      <GlassShell>
+        <div className="flex items-center gap-4">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--glass-accent)_15%,transparent)] ring-1 ring-[color-mix(in_srgb,var(--glass-accent)_30%,transparent)]">
+            <span className="text-xl font-semibold text-[var(--glass-accent)]">
+              {me.username?.[0]?.toUpperCase() || 'U'}
+            </span>
+          </div>
           <div>
-            <strong>{me.username ? `@${me.username}` : `ID ${me.id}`}</strong>
-            <p className="muted">Telegram ID: {me.id}</p>
+            <strong className="text-base block">{me.username ? `@${me.username}` : `ID ${me.id}`}</strong>
+            <span className="text-xs text-[var(--glass-hint)] font-mono">Telegram ID: {me.id}</span>
           </div>
         </div>
-      </Card>
+      </GlassShell>
 
-      <Card title="Лимиты">
+      <GlassCard title="Лимиты">
         {billing?.unlimited ? (
-          <p className="unlimited">∞ Безлимитный dev-тариф</p>
+          <p className="font-mono text-3xl font-semibold tracking-tight m-0 text-[var(--glass-accent)]">
+            Безлимит
+            <span className="block text-xs font-sans font-normal text-[var(--glass-hint)] mt-1">dev-тариф</span>
+          </p>
         ) : (
-          <StatGrid
-            items={[
-              { label: 'Текстовые посты', value: billing?.text_credits ?? me.text_credits },
-              { label: 'Картинки', value: billing?.image_credits ?? me.image_credits },
-            ]}
-          />
+          <div className="grid grid-cols-2 gap-6">
+            <div>
+              <span className="font-mono text-3xl font-semibold">{billing?.text_credits ?? me.text_credits}</span>
+              <span className="block text-xs text-[var(--glass-hint)] mt-1">Текстовые посты</span>
+            </div>
+            <div>
+              <span className="font-mono text-3xl font-semibold">{billing?.image_credits ?? me.image_credits}</span>
+              <span className="block text-xs text-[var(--glass-hint)] mt-1">Картинки</span>
+            </div>
+          </div>
         )}
-        <Btn variant="secondary" onClick={onRefresh} full>
+        <GlassButton className="mt-4" variant="secondary" onClick={onRefresh} full>
           Обновить
-        </Btn>
-      </Card>
-    </>
+        </GlassButton>
+      </GlassCard>
+    </div>
   )
 }

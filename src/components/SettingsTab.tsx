@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
-import {
-  api,
-  channelName,
-  type Channel,
-  type Settings,
-} from '../lib/api'
+import { Gear, X } from '@phosphor-icons/react'
+import { api, channelName, type Channel, type Settings } from '../lib/api'
 import { RichTextEditor } from './RichTextEditor'
-import { Btn, Card, Empty, Field, Toggle } from './ui'
+import { GlassBadge, GlassButton, GlassCard, GlassField, GlassInput, GlassTextarea, GlassToggle, Toast, EmptyState } from './primitives'
 
 export function SettingsTab({
   settings,
@@ -60,167 +56,92 @@ export function SettingsTab({
 
   if (!settings) {
     return (
-      <Card title="Настройки">
-        <Empty text="Подключите канал в боте" />
-      </Card>
+      <GlassCard title="Настройки">
+        <EmptyState icon={Gear} title="Подключите канал" description="Настройки появятся после подключения канала в боте." />
+      </GlassCard>
     )
   }
 
   return (
-    <>
-      {msg && <div className="toast">{msg}</div>}
+    <div className="flex flex-col gap-4">
+      {msg && <Toast>{msg}</Toast>}
 
-      <Card title="Публикация">
-        <Field label="Подпись (footer)" hint="Выделите текст и нажмите B / I / U / 🔗 — HTML не нужен">
-          <RichTextEditor
-            value={footer}
-            onChange={setFooter}
-            placeholder="Текст внизу каждого поста…"
-            rows={3}
-            disabled={busy}
-          />
-        </Field>
+      <GlassCard title="Публикация">
+        <GlassField label="Подпись (footer)" hint="B / I / U / ссылка в панели редактора">
+          <RichTextEditor value={footer} onChange={setFooter} placeholder="Текст внизу каждого поста…" rows={3} disabled={busy} />
+        </GlassField>
         {footer && (
-          <div className="footer-preview-box">
-            <span className="field-hint">Превью:</span>
-            <div className="footer-render" dangerouslySetInnerHTML={{ __html: footer.replace(/\n/g, '<br>') }} />
+          <div className="mt-3 rounded-xl bg-[color-mix(in_srgb,var(--glass-text)_4%,transparent)] p-3 ring-1 ring-[var(--glass-border)]">
+            <span className="text-[10px] uppercase tracking-wider text-[var(--glass-hint)]">Превью</span>
+            <div className="text-sm mt-2" dangerouslySetInnerHTML={{ __html: footer.replace(/\n/g, '<br>') }} />
           </div>
         )}
-        <Btn
-          disabled={busy}
-          onClick={() => run(async () => {
-            await api.patchFooter(footer)
-            flash('Подпись сохранена')
-          })}
-          full
-        >
+        <GlassButton className="mt-3" disabled={busy} full onClick={() => run(async () => { await api.patchFooter(footer); flash('Подпись сохранена') })}>
           Сохранить подпись
-        </Btn>
+        </GlassButton>
 
-        <Field label="Описание / стиль канала">
-          <textarea
-            className="textarea"
-            rows={4}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Тематика, тон, аудитория…"
-          />
-        </Field>
-        <Btn
-          disabled={busy}
-          onClick={() => run(async () => {
-            await api.patchDescription(description)
-            flash('Описание сохранено')
-          })}
-          full
-        >
+        <GlassField label="Описание / стиль канала">
+          <GlassTextarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Тематика, тон, аудитория…" />
+        </GlassField>
+        <GlassButton disabled={busy} full onClick={() => run(async () => { await api.patchDescription(description); flash('Описание сохранено') })}>
           Сохранить описание
-        </Btn>
-      </Card>
+        </GlassButton>
+      </GlassCard>
 
-      <Card title="Расписание">
-        <Field label="Слоты (МСК)" hint="Через запятую: 10:00, 14:00, 18:00">
-          <input
-            className="input"
-            value={slotsText}
-            onChange={(e) => setSlotsText(e.target.value)}
-            placeholder="12:00, 15:00, 18:00"
-          />
-        </Field>
-        <Btn
-          disabled={busy}
-          onClick={() => run(async () => {
-            const times = slotsText.split(/[,;\s]+/).filter(Boolean)
-            const r = await api.patchSlots(times)
-            setSlotsText(r.slots.join(', '))
-            flash('Слоты обновлены')
-          })}
-          full
-        >
+      <GlassCard title="Расписание">
+        <GlassField label="Слоты (МСК)" hint="Через запятую: 10:00, 14:00, 18:00">
+          <GlassInput value={slotsText} onChange={(e) => setSlotsText(e.target.value)} placeholder="12:00, 15:00, 18:00" />
+        </GlassField>
+        <GlassButton disabled={busy} full onClick={() => run(async () => { const times = slotsText.split(/[,;\s]+/).filter(Boolean); const r = await api.patchSlots(times); setSlotsText(r.slots.join(', ')); flash('Слоты обновлены') })}>
           Сохранить слоты
-        </Btn>
+        </GlassButton>
+        <GlassToggle label="Рандом времени ±7–23 мин" checked={jitter} onChange={(v) => { setJitter(v); run(async () => { await api.patchJitter(v); flash(v ? 'Джиттер включён' : 'Джиттер выключен') }) }} />
+      </GlassCard>
 
-        <Toggle
-          label="Рандом времени ±7–23 мин"
-          checked={jitter}
-          onChange={(v) => {
-            setJitter(v)
-            run(async () => {
-              await api.patchJitter(v)
-              flash(v ? 'Джиттер включён' : 'Джиттер выключен')
-            })
-          }}
-        />
-      </Card>
-
-      <Card title="Похожие каналы">
-        <div className="tag-list">
-          {competitors.length === 0 && <Empty text="Нет источников" />}
+      <GlassCard title="Похожие каналы">
+        <div className="flex flex-wrap gap-2 mb-3">
+          {competitors.length === 0 && <span className="text-sm text-[var(--glass-hint)]">Нет источников</span>}
           {competitors.map((u) => (
-            <span key={u} className="tag">
+            <span key={u} className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--glass-text)_6%,transparent)] px-3 py-1 text-xs ring-1 ring-[var(--glass-border)]">
               @{u}
-              <button
-                type="button"
-                className="tag-x"
-                onClick={() =>
-                  run(async () => {
-                    await api.removeCompetitor(u)
-                    setCompetitors((prev) => prev.filter((x) => x !== u))
-                    flash('Удалено')
-                  })
-                }
-              >
-                ×
+              <button type="button" className="text-[var(--glass-hint)] hover:text-[var(--glass-danger)]" onClick={() => run(async () => { await api.removeCompetitor(u); setCompetitors((prev) => prev.filter((x) => x !== u)); flash('Удалено') })}>
+                <X size={12} weight="bold" />
               </button>
             </span>
           ))}
         </div>
-        <div className="inline-add">
-          <input
-            className="input"
-            placeholder="@channel"
-            value={newComp}
-            onChange={(e) => setNewComp(e.target.value)}
-          />
-          <Btn
-            variant="secondary"
-            disabled={busy || !newComp.trim()}
-            onClick={() =>
-              run(async () => {
-                await api.addCompetitor(newComp.replace(/^@/, ''))
-                setNewComp('')
-                const r = await api.getCompetitors()
-                setCompetitors(r.usernames)
-                flash('Канал добавлен')
-              })
-            }
-          >
+        <div className="flex gap-2">
+          <GlassInput placeholder="@channel" value={newComp} onChange={(e) => setNewComp(e.target.value)} />
+          <GlassButton variant="secondary" disabled={busy || !newComp.trim()} onClick={() => run(async () => { await api.addCompetitor(newComp.replace(/^@/, '')); setNewComp(''); const r = await api.getCompetitors(); setCompetitors(r.usernames); flash('Канал добавлен') })}>
             +
-          </Btn>
+          </GlassButton>
         </div>
-      </Card>
+      </GlassCard>
 
-      <Card title="Каналы">
-        <ul className="channel-list">
+      <GlassCard title="Каналы">
+        <ul className="flex flex-col gap-2 m-0 p-0 list-none">
           {channels.map((c) => (
-            <li key={c.id} className={c.id === activeId ? 'active' : ''}>
-              <div className="ch-info">
-                <strong>{channelName(c)}</strong>
-                {!c.is_bot_connected && (
-                  <span className="badge err">нет доступа</span>
-                )}
+            <li
+              key={c.id}
+              className={`flex items-center justify-between gap-3 rounded-xl px-3 py-3 ring-1 ${
+                c.id === activeId ? 'ring-[color-mix(in_srgb,var(--glass-accent)_40%,transparent)] bg-[color-mix(in_srgb,var(--glass-accent)_8%,transparent)]' : 'ring-[var(--glass-border)] bg-[color-mix(in_srgb,var(--glass-text)_3%,transparent)]'
+              }`}
+            >
+              <div>
+                <strong className="text-sm block">{channelName(c)}</strong>
+                {!c.is_bot_connected && <GlassBadge status="missed" />}
               </div>
               {c.id === activeId ? (
-                <span className="badge ok">активный</span>
+                <span className="text-[10px] uppercase tracking-wider text-[var(--glass-success)]">активный</span>
               ) : (
-                <Btn variant="secondary" onClick={() => onSwitchChannel(c.id)}>
+                <GlassButton variant="secondary" onClick={() => onSwitchChannel(c.id)}>
                   Выбрать
-                </Btn>
+                </GlassButton>
               )}
             </li>
           ))}
         </ul>
-      </Card>
-    </>
+      </GlassCard>
+    </div>
   )
 }
