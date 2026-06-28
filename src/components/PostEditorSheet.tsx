@@ -52,7 +52,6 @@ export function PostEditorSheet({
   const [btnUrl, setBtnUrl] = useState('')
   const [btnText, setBtnText] = useState('')
   const [autodelete, setAutodelete] = useState<AutoDel>(0)
-  const [pinAfter, setPinAfter] = useState(false)
   const [silent, setSilent] = useState(false)
   const [scheduleAt, setScheduleAt] = useState(() => defaultSchedule(defaultDay))
   const [mediaItems, setMediaItems] = useState<{ src: string; index: number }[]>([])
@@ -98,7 +97,6 @@ export function PostEditorSheet({
     setBtnUrl(d.inline_button_url || '')
     setBtnText(d.inline_button_text || '')
     setAutodelete(toAutoDel(d.autodelete_hours))
-    setPinAfter(d.pin_after_publish)
     setSilent(d.disable_notification)
     setBtnUrlError(null)
     if (d.scheduled_at) {
@@ -152,7 +150,6 @@ export function PostEditorSheet({
     const payload: Record<string, unknown> = {
       text: currentText(),
       autodelete_hours: autodelete || 0,
-      pin_after_publish: pinAfter,
       disable_notification: silent,
     }
     if (btnUrl.trim()) {
@@ -273,7 +270,6 @@ export function PostEditorSheet({
                 await api.patchDraft(draftId, {
                   text: currentText(),
                   autodelete_hours: autodelete || 0,
-                  pin_after_publish: pinAfter,
                   disable_notification: silent,
                   ...(btnUrl.trim()
                     ? { inline_button_url: btnUrl.trim(), inline_button_text: btnText.trim() || '/auto' }
@@ -518,36 +514,20 @@ export function PostEditorSheet({
               disabled={busy}
             />
             {editable && (
-              <>
-                <Toggle
-                  label="📌 Закрепить после публикации"
-                  checked={pinAfter}
-                  onChange={(v) => {
-                    setPinAfter(v)
-                    run(async () => {
-                      const d = await api.patchDraft(draftId, {
-                        text: currentText(),
-                        pin_after_publish: v,
-                      })
-                      await applyDraft(d)
+              <Toggle
+                label="🔕 Без звука (тихая публикация)"
+                checked={silent}
+                onChange={(v) => {
+                  setSilent(v)
+                  run(async () => {
+                    const d = await api.patchDraft(draftId, {
+                      text: currentText(),
+                      disable_notification: v,
                     })
-                  }}
-                />
-                <Toggle
-                  label="🔕 Без звука (тихая публикация)"
-                  checked={silent}
-                  onChange={(v) => {
-                    setSilent(v)
-                    run(async () => {
-                      const d = await api.patchDraft(draftId, {
-                        text: currentText(),
-                        disable_notification: v,
-                      })
-                      await applyDraft(d)
-                    })
-                  }}
-                />
-              </>
+                    await applyDraft(d)
+                  })
+                }}
+              />
             )}
           </section>
 
