@@ -21,8 +21,11 @@ export function htmlToTelegram(html: string): string {
     if (tag === 'i' || tag === 'em') return `<i>${inner}</i>`
     if (tag === 'u') return `<u>${inner}</u>`
     if (tag === 'a') {
-      const href = el.getAttribute('href') || ''
-      if (href.startsWith('http')) return `<a href="${href}">${inner}</a>`
+      const href = (el.getAttribute('href') || '').trim()
+      const safe = href.replace(/"/g, '&quot;')
+      if (href.startsWith('http') || href.startsWith('tg:')) {
+        return `<a href="${safe}">${inner || href}</a>`
+      }
       return inner
     }
     if (tag === 'span') return inner
@@ -37,22 +40,109 @@ export function htmlToTelegram(html: string): string {
 /** Telegram HTML → contenteditable HTML for editing. */
 export function telegramToHtml(text: string): string {
   if (!text) return ''
-  return text
-    .replace(/\n/g, '<br>')
-    .replace(/<b>/gi, '<b>')
-    .replace(/<\/b>/gi, '</b>')
-    .replace(/<i>/gi, '<i>')
-    .replace(/<\/i>/gi, '</i>')
-    .replace(/<u>/gi, '<u>')
-    .replace(/<\/u>/gi, '</u>')
+  return text.replace(/\n/g, '<br>')
 }
 
-export function formatCmd(cmd: string, value?: string) {
-  document.execCommand('styleWithCSS', false, 'false')
-  if (cmd === 'link') {
-    const url = value || prompt('URL ссылки (https://…)', 'https://') || ''
-    if (url) document.execCommand('createLink', false, url)
+function saveSelection(container: HTMLElement): Range | null {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return null
+  const range = sel.getRangeAt(0)
+  if (!container.contains(range.commonAncestorContainer)) return null
+  return range.cloneRange()
+}
+
+function restoreSelection(range: Range) {
+  const sel = window.getSelection()
+  if (!sel) return
+  sel.removeAllRanges()
+  sel.addRange(range)
+}
+
+function normalizeUrl(raw: string): string {
+  const url = raw.trim()
+  if (!url) return ''
+  if (/^(https?:\/\/|tg:)/i.test(url)) return url
+  return `https://${url}`
+}
+
+/** Вставить или обернуть ссылку (selection сохраняется через prompt). */
+export function applyLink(container: HTMLElement): void {
+  let saved = saveSelection(container)
+  if (!saved) {
+    container.focus()
+    const range = document.createRange()
+    range.selectNodeContents(container)
+    range.collapse(false)
+    saved = range
+  }
+
+  const urlRaw = prompt('URL ссылки', 'https://')?.trim()
+  if (!urlRaw) return
+
+  const href = normalizeUrl(urlRaw)
+  restoreSelection(saved)
+  container.focus()
+
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return
+  const range = sel.getRangeAt(0)
+
+  if (range.collapsed) {
+    const label = urlRaw.replace(/^https?:\/\//i, '')
+    const a = document.createElement('a')
+    a.href = href
+    a.textContent = label
+    range.insertNode(a)
+    range.setStartAfter(a)
+    range.collapse(true)
+    sel.removeAllRanges()
+    sel.addRange(range)
     return
   }
-  document.execCommand(cmd, false, value)
+
+  document.execCommand('createLink', false, href)
+}
+
+/** Снять форматирование и убрать ссылки. */
+export function clearFormatting(container: HTMLElement): void {
+  container.focus()
+  const sel = window.getSelection()
+  const hasRange =
+    sel && sel.rangeCount > 0 && container.contains(sel.anchorNode)
+
+  if (hasRange && sel && !sel.isCollapsed) {
+    document.execCommand('unlink', false)
+    document.execCommand('removeFormat', false)
+    document.execCommand('unlink', false)
+  } else {
+    unwrapAllLinks(container)
+    container.querySelectorAll('b, strong, i, em, u').forEach((el) => {
+      unwrapElement(el as HTMLElement)
+    })
+  }
+}
+
+function unwrapElement(el: HTMLElement) {
+  const parent = el.parentNode
+  if (!parent) return
+  while (el.firstChild) parent.insertBefore(el.firstChild, el)
+  parent.removeChild(el)
+}
+
+function unwrapAllLinks(container: HTMLElement) {
+  container.querySelectorAll('a').forEach((a) => unwrapElement(a as HTMLElement))
+}
+
+export function formatCmd(container: HTMLElement, cmd: string) {
+  container.focus()
+  if (cmd === 'link') {
+    applyLink(container)
+    return
+  }
+  if (cmd === 'removeFormat') {
+    clearFormatting(container)
+    return
+  }
+  document.execCommand('styleWithCSS', false, 'false')
+  document.execCommand(cmd, false, undefined)
 }

@@ -30,24 +30,30 @@ export function RichTextEditor({
     onChange(html)
   }
 
+  const runCmd = (cmd: string) => {
+    if (!ref.current || disabled) return
+    formatCmd(ref.current, cmd)
+    sync()
+  }
+
   const minH = rows * 22
 
   return (
     <div className={`rte${disabled ? ' rte-disabled' : ''}`}>
       <div className="rte-toolbar">
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); formatCmd('bold') }} title="Жирный">
+        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('bold') }} title="Жирный">
           <b>B</b>
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); formatCmd('italic') }} title="Курсив">
+        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('italic') }} title="Курсив">
           <i>I</i>
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); formatCmd('underline') }} title="Подчёркнутый">
+        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('underline') }} title="Подчёркнутый">
           <u>U</u>
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); formatCmd('link') }} title="Ссылка">
+        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('link') }} title="Ссылка">
           🔗
         </button>
-        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); formatCmd('removeFormat') }} title="Сброс">
+        <button type="button" disabled={disabled} onMouseDown={(e) => { e.preventDefault(); runCmd('removeFormat') }} title="Сброс форматирования и ссылок">
           ✕
         </button>
       </div>

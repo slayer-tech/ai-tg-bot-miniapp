@@ -509,6 +509,15 @@ select.input {
   min-height: 80px;
   word-break: break-word;
 }
+.rte-body a {
+  color: #64d2ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.rte-body a:visited {
+  color: #7dd3fc;
+}
 .rte-body:empty:before {
   content: attr(data-placeholder);
   color: var(--hint);
@@ -527,7 +536,11 @@ select.input {
   line-height: 1.4;
   color: var(--hint);
 }
-.footer-render a { color: var(--accent); }
+.footer-render a {
+  color: #64d2ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* Post editor sheet */
 .sheet-overlay {
