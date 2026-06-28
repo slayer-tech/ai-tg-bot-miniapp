@@ -7,7 +7,9 @@ import {
   scheduleFromIso,
 } from '../lib/scheduleMsk'
 import { RichTextEditor } from './RichTextEditor'
+import { MediaAlbumGrid, MediaPickerDialog } from './MediaAlbum'
 import { Btn, SegmentChips, Toggle } from './ui'
+import { MAX_DRAFT_PHOTOS, validateInlineButtonUrl } from '../lib/validateUrl'
 
 type Aspect = 'vertical' | 'square' | 'horizontal'
 type AutoDel = 0 | 1 | 24 | 48
@@ -53,13 +55,39 @@ export function PostEditorSheet({
   const [pinAfter, setPinAfter] = useState(false)
   const [silent, setSilent] = useState(false)
   const [scheduleAt, setScheduleAt] = useState(() => defaultSchedule(defaultDay))
-  const [mediaSrc, setMediaSrc] = useState<string | null>(null)
+  const [mediaItems, setMediaItems] = useState<{ src: string; index: number }[]>([])
+  const mediaBlobsRef = useRef<string[]>([])
+  const [picker, setPicker] = useState<'remove' | 'ai-edit' | null>(null)
+  const [btnUrlError, setBtnUrlError] = useState<string | null>(null)
   const [aspect, setAspect] = useState<Aspect>('square')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [aiPrompt, setAiPrompt] = useState('')
   const [showAiWrite, setShowAiWrite] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  const revokeMediaBlobs = () => {
+    mediaBlobsRef.current.forEach((u) => URL.revokeObjectURL(u))
+    mediaBlobsRef.current = []
+  }
+
+  const loadMediaItems = async (d: DraftFull) => {
+    revokeMediaBlobs()
+    const paths = d.media_urls?.length
+      ? d.media_urls
+      : d.media_url
+        ? [d.media_url]
+        : []
+    const loaded: { src: string; index: number }[] = []
+    for (let i = 0; i < paths.length; i++) {
+      const src = await fetchMediaUrl(paths[i])
+      if (src) {
+        mediaBlobsRef.current.push(src)
+        loaded.push({ src, index: i })
+      }
+    }
+    setMediaItems(loaded)
+  }
 
   const applyDraft = async (d: DraftFull) => {
     setDraft(d)
@@ -69,21 +97,11 @@ export function PostEditorSheet({
     setAutodelete(toAutoDel(d.autodelete_hours))
     setPinAfter(d.pin_after_publish)
     setSilent(d.disable_notification)
+    setBtnUrlError(null)
     if (d.scheduled_at) {
       setScheduleAt(scheduleFromIso(d.scheduled_at))
     }
-    if (d.media_url) {
-      const url = await fetchMediaUrl(d.media_url)
-      setMediaSrc((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return url
-      })
-    } else {
-      setMediaSrc((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return null
-      })
-    }
+    await loadMediaItems(d)
   }
 
   const load = async () => {
@@ -92,12 +110,7 @@ export function PostEditorSheet({
 
   useEffect(() => {
     load().catch((e) => setMsg(humanError(e)))
-    return () => {
-      setMediaSrc((prev) => {
-        if (prev) URL.revokeObjectURL(prev)
-        return null
-      })
-    }
+    return () => revokeMediaBlobs()
   }, [draftId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (fn: () => Promise<void>, success?: string) => {
@@ -118,7 +131,21 @@ export function PostEditorSheet({
     }
   }
 
+  const checkBtnUrl = (): boolean => {
+    if (!btnUrl.trim()) {
+      setBtnUrlError(null)
+      return true
+    }
+    const err = validateInlineButtonUrl(btnUrl)
+    setBtnUrlError(err)
+    return !err
+  }
+
   const patchForPublish = async () => {
+    if (btnUrl.trim()) {
+      const err = validateInlineButtonUrl(btnUrl)
+      if (err) throw new Error(err)
+    }
     const payload: Record<string, unknown> = {
       text,
       autodelete_hours: autodelete || 0,
@@ -144,8 +171,12 @@ export function PostEditorSheet({
     }, h ? `Автоудаление: ${h} ч` : 'Автоудаление выкл')
   }
 
-  const saveButton = (useAi = false) =>
-    run(async () => {
+  const saveButton = (useAi = false) => {
+    if (!checkBtnUrl()) {
+      setMsg(btnUrlError || 'Неверная ссылка')
+      return
+    }
+    return run(async () => {
       const d = await api.patchDraft(draftId, {
         inline_button_url: btnUrl.trim(),
         inline_button_text: useAi ? '/auto' : btnText.trim() || '/auto',
@@ -154,8 +185,55 @@ export function PostEditorSheet({
       await applyDraft(d)
       setBtnText(d.inline_button_text || '')
     }, 'Кнопка сохранена')
+  }
 
   const refreshMedia = async (d: DraftFull) => applyDraft(d)
+
+  const mediaCount = draft?.media_count ?? mediaItems.length
+  const maxMedia = draft?.max_media ?? MAX_DRAFT_PHOTOS
+  const canAddMedia = mediaCount < maxMedia
+
+  const removeMediaAt = (index: number) =>
+    run(async () => refreshMedia(await api.removeDraftMediaAt(draftId, index)), 'Удалено')
+
+  const runAiEditAt = (index: number) =>
+    run(async () => refreshMedia(await api.aiImage(draftId, 'uniqueify', 'square', undefined, index)), 'ИИ доработал')
+
+  const handleRemoveClick = () => {
+    if (mediaCount <= 1) {
+      if (confirm('Убрать фото?')) removeMediaAt(0)
+      return
+    }
+    setPicker('remove')
+  }
+
+  const handleAiEditClick = () => {
+    if (mediaCount <= 1) {
+      runAiEditAt(0)
+      return
+    }
+    setPicker('ai-edit')
+  }
+
+  const handlePhotoClick = (index: number) => {
+    if (confirm(`Убрать фото ${index + 1}?`)) removeMediaAt(index)
+  }
+
+  const uploadFiles = (files: FileList | null) => {
+    if (!files?.length) return
+    const remaining = maxMedia - mediaCount
+    const batch = Array.from(files).slice(0, remaining)
+    if (batch.length < files.length) {
+      setMsg(`Максимум ${maxMedia} фото — загружено ${batch.length}`)
+    }
+    run(async () => {
+      let d = draft!
+      for (const f of batch) {
+        d = await api.uploadDraftMedia(draftId, f)
+      }
+      await refreshMedia(d)
+    }, batch.length > 1 ? `Загружено ${batch.length} фото` : 'Загружено')
+  }
 
   if (!draft) {
     return (
@@ -213,33 +291,33 @@ export function PostEditorSheet({
           {/* Image */}
           {!published && (
             <section className="editor-section">
-              <h3>🖼 Картинка</h3>
-              {mediaSrc ? (
-                <div className="media-preview">
-                  <img src={mediaSrc} alt="" />
+              <h3>🖼 Фото</h3>
+              <p className="field-hint">
+                До {maxMedia} фото в альбоме (как в Telegram). Нажмите на фото, чтобы убрать.
+              </p>
+              {mediaItems.length > 0 ? (
+                <>
+                  <MediaAlbumGrid
+                    items={mediaItems}
+                    editable={!busy}
+                    onPhotoClick={handlePhotoClick}
+                  />
                   <div className="media-actions">
-                    <Btn variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()}>
-                      Заменить
-                    </Btn>
                     <Btn
                       variant="secondary"
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => refreshMedia(await api.removeDraftMedia(draftId)), 'Удалено')
-                      }
+                      disabled={busy || !canAddMedia}
+                      onClick={() => fileRef.current?.click()}
                     >
+                      ➕ Добавить
+                    </Btn>
+                    <Btn variant="secondary" disabled={busy} onClick={handleRemoveClick}>
                       Убрать
                     </Btn>
-                    <Btn
-                      disabled={busy}
-                      onClick={() =>
-                        run(async () => refreshMedia(await api.aiImage(draftId, 'uniqueify')), 'ИИ доработал')
-                      }
-                    >
+                    <Btn disabled={busy} onClick={handleAiEditClick}>
                       ✨ ИИ-редакт
                     </Btn>
                   </div>
-                </div>
+                </>
               ) : (
                 <div className="media-empty">
                   <Btn variant="secondary" disabled={busy} onClick={() => fileRef.current?.click()} full>
@@ -264,27 +342,45 @@ export function PostEditorSheet({
                   </Btn>
                 </div>
               )}
+              {mediaItems.length > 0 && canAddMedia && (
+                <>
+                  <p className="field-hint">ИИ-генерация добавит ещё одно фото:</p>
+                  <SegmentChips options={ASPECT_OPTS} value={aspect} onChange={setAspect} disabled={busy} />
+                  <Btn
+                    disabled={busy || !canAddMedia}
+                    onClick={() =>
+                      run(
+                        async () =>
+                          refreshMedia(
+                            await api.aiImage(draftId, 'generate', aspect, aiPrompt || text),
+                          ),
+                        'Сгенерировано',
+                      )
+                    }
+                    full
+                  >
+                    🎨 Сгенерировать ИИ
+                  </Btn>
+                </>
+              )}
               <input
                 ref={fileRef}
                 type="file"
                 accept="image/*"
+                multiple
                 hidden
                 onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (!f) return
-                  run(async () => refreshMedia(await api.uploadDraftMedia(draftId, f)), 'Загружено')
+                  uploadFiles(e.target.files)
                   e.target.value = ''
                 }}
               />
             </section>
           )}
 
-          {published && mediaSrc && (
+          {published && mediaItems.length > 0 && (
             <section className="editor-section">
-              <h3>🖼 Картинка</h3>
-              <div className="media-preview">
-                <img src={mediaSrc} alt="" />
-              </div>
+              <h3>🖼 Фото</h3>
+              <MediaAlbumGrid items={mediaItems} editable={false} onPhotoClick={() => {}} />
             </section>
           )}
 
@@ -354,7 +450,17 @@ export function PostEditorSheet({
                   <span className="field-hint">{draft.inline_button_url}</span>
                 </div>
               )}
-              <input className="input" placeholder="URL — https://…" value={btnUrl} onChange={(e) => setBtnUrl(e.target.value)} />
+              <input
+                className={`input${btnUrlError ? ' input-err' : ''}`}
+                placeholder="URL — https://… или @channel"
+                value={btnUrl}
+                onChange={(e) => {
+                  setBtnUrl(e.target.value)
+                  if (btnUrlError) setBtnUrlError(null)
+                }}
+                onBlur={() => btnUrl.trim() && checkBtnUrl()}
+              />
+              {btnUrlError && <p className="field-hint err-hint">{btnUrlError}</p>}
               <input className="input" placeholder="Текст кнопки" value={btnText} onChange={(e) => setBtnText(e.target.value)} />
               <div className="ai-row">
                 <Btn variant="secondary" disabled={busy || !btnUrl.trim()} onClick={() => saveButton(false)} full>
@@ -492,6 +598,19 @@ export function PostEditorSheet({
           </section>
         </div>
       </div>
+
+      {picker && mediaCount > 1 && (
+        <MediaPickerDialog
+          title={picker === 'remove' ? 'Какое фото убрать?' : 'Какое фото отредактировать ИИ?'}
+          count={mediaCount}
+          onPick={(index) => {
+            setPicker(null)
+            if (picker === 'remove') removeMediaAt(index)
+            else runAiEditAt(index)
+          }}
+          onCancel={() => setPicker(null)}
+        />
+      )}
     </div>
   )
 }

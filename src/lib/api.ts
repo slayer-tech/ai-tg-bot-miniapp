@@ -146,6 +146,9 @@ export type DraftFull = {
   text_html: string
   footer_preview: string
   media_url: string | null
+  media_urls?: string[]
+  media_count?: number
+  max_media?: number
   has_media: boolean
   scheduled_at: string | null
   autodelete_hours: number | null
@@ -277,6 +280,8 @@ export const api = {
     upload<DraftFull>(`/api/drafts/${id}/media`, file),
   removeDraftMedia: (id: number) =>
     request<DraftFull>(`/api/drafts/${id}/media`, { method: 'DELETE' }),
+  removeDraftMediaAt: (id: number, index: number) =>
+    request<DraftFull>(`/api/drafts/${id}/media/${index}`, { method: 'DELETE' }),
   aiText: (id: number, action: string, prompt?: string) =>
     request<DraftFull>(`/api/drafts/${id}/ai/text`, {
       method: 'POST',
@@ -287,10 +292,11 @@ export const api = {
     action: 'uniqueify' | 'generate',
     aspect = 'square',
     prompt?: string,
+    mediaIndex = 0,
   ) =>
     request<DraftFull>(`/api/drafts/${id}/ai/image`, {
       method: 'POST',
-      body: JSON.stringify({ action, aspect, prompt }),
+      body: JSON.stringify({ action, aspect, prompt, media_index: mediaIndex }),
     }),
 }
 
