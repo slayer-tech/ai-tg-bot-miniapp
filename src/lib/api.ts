@@ -158,6 +158,7 @@ export type DraftFull = {
   inline_button_url: string | null
   pin_after_publish: boolean
   disable_notification: boolean
+  skip_footer: boolean
   source_type: string
   is_editable: boolean
   is_published: boolean

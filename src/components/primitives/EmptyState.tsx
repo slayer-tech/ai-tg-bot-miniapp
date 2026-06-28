@@ -61,10 +61,11 @@ export function ErrorBanner({
 export function Toast({ children, error }: { children: ReactNode; error?: boolean }) {
   return (
     <div
-      className={`mx-4 mb-2 rounded-xl px-4 py-2.5 text-sm font-medium ${
+      role={error ? 'alert' : 'status'}
+      className={`mx-4 mb-2 rounded-xl px-3.5 py-2 text-xs font-medium leading-snug ${
         error
-          ? 'bg-[color-mix(in_srgb,var(--glass-danger)_15%,transparent)] text-[var(--glass-danger)]'
-          : 'bg-[color-mix(in_srgb,var(--glass-accent)_18%,transparent)] text-[var(--glass-success)]'
+          ? 'bg-[color-mix(in_srgb,var(--glass-danger)_15%,transparent)] text-[var(--glass-danger)] ring-1 ring-[color-mix(in_srgb,var(--glass-danger)_25%,transparent)]'
+          : 'bg-[color-mix(in_srgb,var(--glass-accent)_18%,transparent)] text-[var(--glass-success)] ring-1 ring-[color-mix(in_srgb,var(--glass-success)_20%,transparent)]'
       }`}
     >
       {children}

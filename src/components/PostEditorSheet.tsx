@@ -20,19 +20,20 @@ import {
   scheduleFromIso,
 } from '../lib/scheduleMsk'
 import { RichTextEditor, type RichTextEditorHandle } from './RichTextEditor'
-import { MediaAlbumGrid, MediaPickerDialog } from './MediaAlbum'
+import { MediaAlbumGrid, MediaPickerDialog, AiImageEditDialog } from './MediaAlbum'
 import {
   GlassBadge,
   GlassButton,
   GlassIconButton,
   GlassSegment,
   GlassSheet,
-  GlassToggle,
-  Toast,
+  GlassOptionToggle,
+  useToast,
 } from './primitives'
+import { NoFooterOptionIcon, PinOptionIcon, SilentOptionIcon } from './icons/PostOptionIcons'
 import { GlassInput } from './primitives/GlassField'
 import { AppSkeleton } from './primitives/Skeleton'
-import { MAX_DRAFT_PHOTOS, validateInlineButtonUrl } from '../lib/validateUrl'
+import { maxPhotosForDraft, MAX_DRAFT_PHOTOS_GALLERY, validateInlineButtonUrl } from '../lib/validateUrl'
 
 type Aspect = 'vertical' | 'square' | 'horizontal'
 
@@ -83,14 +84,17 @@ export function PostEditorSheet({
   const [autodeleteCustom, setAutodeleteCustom] = useState('')
   const [silent, setSilent] = useState(false)
   const [pinAfter, setPinAfter] = useState(false)
+  const [skipFooter, setSkipFooter] = useState(false)
   const [scheduleAt, setScheduleAt] = useState(() => defaultScheduleMsk(defaultDay))
   const [mediaItems, setMediaItems] = useState<{ src: string; index: number }[]>([])
   const mediaBlobsRef = useRef<string[]>([])
   const [picker, setPicker] = useState<'remove' | 'ai-edit' | null>(null)
+  const [aiEditIndex, setAiEditIndex] = useState<number | null>(null)
+  const [aiEditPrompt, setAiEditPrompt] = useState('')
   const [btnUrlError, setBtnUrlError] = useState<string | null>(null)
   const [aspect, setAspect] = useState<Aspect>('square')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
+  const toast = useToast()
   const [aiPrompt, setAiPrompt] = useState('')
   const [showAiWrite, setShowAiWrite] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -128,28 +132,29 @@ export function PostEditorSheet({
     )
     setPinAfter(d.pin_after_publish)
     setSilent(d.disable_notification)
+    setSkipFooter(d.skip_footer ?? false)
     setBtnUrlError(null)
     if (d.scheduled_at) setScheduleAt(scheduleFromIso(d.scheduled_at))
     await loadMediaItems(d)
   }
 
   useEffect(() => {
-    api.getDraft(draftId).then(applyDraft).catch((e) => setMsg(humanError(e)))
+    api.getDraft(draftId).then(applyDraft).catch((e) => toast.show(humanError(e), true))
     return () => revokeMediaBlobs()
   }, [draftId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const run = async (fn: () => Promise<void>, success?: string) => {
     setBusy(true)
-    setMsg(null)
+    toast.clear()
     try {
       await fn()
       if (success) {
-        setMsg(success)
+        toast.show(success, false)
         WebApp.HapticFeedback?.notificationOccurred('success')
       }
       onSaved()
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e))
+      toast.show(humanError(e), true)
       WebApp.HapticFeedback?.notificationOccurred('error')
     } finally {
       setBusy(false)
@@ -176,6 +181,7 @@ export function PostEditorSheet({
       autodelete_hours: autodelete || 0,
       pin_after_publish: pinAfter,
       disable_notification: silent,
+      skip_footer: skipFooter,
     }
     if (btnUrl.trim()) {
       payload.inline_button_url = btnUrl.trim()
@@ -190,7 +196,7 @@ export function PostEditorSheet({
 
   const saveAutodelete = (h: number) => {
     if (h !== 0 && (h < AUTODELETE_MIN || h > AUTODELETE_MAX)) {
-      setMsg(`Автоудаление: от ${AUTODELETE_MIN} до ${AUTODELETE_MAX} ч`)
+      toast.show(`Автоудаление: от ${AUTODELETE_MIN} до ${AUTODELETE_MAX} ч`, true)
       return
     }
     setAutodelete(h)
@@ -206,17 +212,21 @@ export function PostEditorSheet({
     if (!raw) return
     const n = Number.parseInt(raw, 10)
     if (!Number.isFinite(n)) {
-      setMsg('Укажите целое число часов')
+      toast.show('Укажите целое число часов', true)
       return
     }
     saveAutodelete(n)
   }
 
   const autodeleteChipValue = PRESET_SET.has(autodelete) ? autodelete : -1
+  const btnUrlValidationError = btnUrl.trim() ? validateInlineButtonUrl(btnUrl) : null
+  const btnUrlInvalid = Boolean(btnUrlValidationError)
 
   const saveButton = (useAi = false) => {
-    if (!checkBtnUrl()) {
-      setMsg(btnUrlError || 'Неверная ссылка')
+    const err = btnUrl.trim() ? validateInlineButtonUrl(btnUrl) : 'Укажите ссылку'
+    if (err) {
+      setBtnUrlError(err)
+      toast.show(err, true)
       return
     }
     return run(async () => {
@@ -232,15 +242,33 @@ export function PostEditorSheet({
   }
 
   const refreshMedia = async (d: DraftFull) => applyDraft(d)
+  const hasText = Boolean(stripHtml(text).trim())
   const mediaCount = draft?.media_count ?? mediaItems.length
-  const maxMedia = draft?.max_media ?? MAX_DRAFT_PHOTOS
+  const maxMedia = maxPhotosForDraft(hasText)
   const canAddMedia = mediaCount < maxMedia
 
   const removeMediaAt = (index: number) =>
     run(async () => refreshMedia(await api.removeDraftMediaAt(draftId, index)), 'Удалено')
 
-  const runAiEditAt = (index: number) =>
-    run(async () => refreshMedia(await api.aiImage(draftId, 'uniqueify', 'square', undefined, index)), 'ИИ доработал')
+  const startAiEdit = (index: number) => {
+    setAiEditIndex(index)
+    setAiEditPrompt('')
+  }
+
+  const submitAiEdit = () => {
+    if (aiEditIndex === null) return
+    const prompt = aiEditPrompt.trim()
+    if (prompt.length < 2) {
+      toast.show('Опишите, что изменить на фото', true)
+      return
+    }
+    const index = aiEditIndex
+    return run(async () => {
+      await refreshMedia(await api.aiImage(draftId, 'uniqueify', 'square', prompt, index))
+      setAiEditIndex(null)
+      setAiEditPrompt('')
+    }, 'Фото обновлено')
+  }
 
   const uploadFiles = (files: FileList | null) => {
     if (!files?.length) return
@@ -257,7 +285,7 @@ export function PostEditorSheet({
       <GlassSheet open onClose={onClose}>
         <div className="p-6">
           <AppSkeleton />
-          {msg && <p className="text-sm text-[var(--glass-danger)]">{msg}</p>}
+          {toast.node}
         </div>
       </GlassSheet>
     )
@@ -286,6 +314,7 @@ export function PostEditorSheet({
                 autodelete_hours: autodelete || 0,
                 pin_after_publish: pinAfter,
                 disable_notification: silent,
+                skip_footer: skipFooter,
                 ...(btnUrl.trim()
                   ? { inline_button_url: btnUrl.trim(), inline_button_text: btnText.trim() || '/auto' }
                   : { clear_button: true }),
@@ -297,7 +326,7 @@ export function PostEditorSheet({
         </GlassIconButton>
       </header>
 
-      {msg && <Toast>{msg}</Toast>}
+      {toast.node}
 
       <div className="flex-1 overflow-y-auto px-4 pb-32">
         {published && (
@@ -308,7 +337,11 @@ export function PostEditorSheet({
 
         {!published && (
           <Section icon={ImageIcon} title="Фото">
-            <p className="text-xs text-[var(--glass-hint)] mb-3">До {maxMedia} фото в альбоме</p>
+            <p className="text-xs text-[var(--glass-hint)] mb-3">
+              {hasText
+                ? 'С текстом — 1 фото (подпись Telegram до 1024 символов)'
+                : `Без текста — альбом до ${MAX_DRAFT_PHOTOS_GALLERY} фото`}
+            </p>
             {mediaItems.length > 0 ? (
               <>
                 <MediaAlbumGrid
@@ -323,7 +356,7 @@ export function PostEditorSheet({
                   <GlassButton variant="secondary" disabled={busy} onClick={() => (mediaCount <= 1 ? confirm('Убрать фото?') && removeMediaAt(0) : setPicker('remove'))}>
                     Убрать
                   </GlassButton>
-                  <GlassButton disabled={busy} onClick={() => (mediaCount <= 1 ? runAiEditAt(0) : setPicker('ai-edit'))} trailing={<Sparkle size={14} weight="fill" />}>
+                  <GlassButton disabled={busy} onClick={() => (mediaCount <= 1 ? startAiEdit(0) : setPicker('ai-edit'))} trailing={<Sparkle size={14} weight="fill" />}>
                     ИИ-редакт
                   </GlassButton>
                 </div>
@@ -382,12 +415,14 @@ export function PostEditorSheet({
 
         {editable && (
           <Section icon={LinkSimple} title="Кнопка под постом">
-            <GlassInput className="mb-2" placeholder="URL — https://… или @channel" value={btnUrl} error={!!btnUrlError} onChange={(e) => { setBtnUrl(e.target.value); if (btnUrlError) setBtnUrlError(null) }} onBlur={() => btnUrl.trim() && checkBtnUrl()} />
-            {btnUrlError && <p className="text-xs text-[var(--glass-danger)] mb-2">{btnUrlError}</p>}
+            <GlassInput className="mb-2" placeholder="URL — https://… или @channel" value={btnUrl} error={!!(btnUrlError || btnUrlValidationError)} onChange={(e) => { setBtnUrl(e.target.value); if (btnUrlError) setBtnUrlError(null) }} onBlur={() => btnUrl.trim() && checkBtnUrl()} />
+            {(btnUrlError || btnUrlValidationError) && (
+              <p className="text-xs text-[var(--glass-danger)] mb-2">{btnUrlError || btnUrlValidationError}</p>
+            )}
             <GlassInput className="mb-3" placeholder="Текст кнопки" value={btnText} onChange={(e) => setBtnText(e.target.value)} />
             <div className="flex flex-col gap-2">
-              <GlassButton variant="secondary" disabled={busy || !btnUrl.trim()} full onClick={() => saveButton(false)}>Сохранить кнопку</GlassButton>
-              <GlassButton disabled={busy || !btnUrl.trim()} full trailing={<Sparkle size={14} weight="fill" />} onClick={() => saveButton(true)}>ИИ подберёт текст</GlassButton>
+              <GlassButton variant="secondary" disabled={busy || !btnUrl.trim() || btnUrlInvalid} full onClick={() => saveButton(false)}>Сохранить кнопку</GlassButton>
+              <GlassButton disabled={busy || !btnUrl.trim() || btnUrlInvalid} full trailing={<Sparkle size={14} weight="fill" />} onClick={() => saveButton(true)}>ИИ подберёт текст</GlassButton>
               {(btnUrl || draft.inline_button_url) && (
                 <GlassButton variant="ghost" disabled={busy} full onClick={() => run(async () => { const d = await api.patchDraft(draftId, { text: currentText(), clear_button: true }); await applyDraft(d); setBtnUrl(''); setBtnText('') }, 'Кнопка убрана')}>Убрать кнопку</GlassButton>
               )}
@@ -403,10 +438,38 @@ export function PostEditorSheet({
             <GlassButton variant="secondary" disabled={busy || !autodeleteCustom.trim()} onClick={applyCustomAutodelete}>OK</GlassButton>
           </div>
           {editable && (
-            <>
-              <GlassToggle label="Закрепить после публикации" checked={pinAfter} onChange={(v) => { setPinAfter(v); run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), pin_after_publish: v }))) }} />
-              <GlassToggle label="Без звука" checked={silent} onChange={(v) => { setSilent(v); run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), disable_notification: v }))) }} />
-            </>
+            <div className="flex flex-col gap-2 mt-4">
+              <GlassOptionToggle
+                label="Закрепить"
+                hint="Закрепить пост после публикации"
+                checked={pinAfter}
+                icon={<PinOptionIcon active={pinAfter} />}
+                onChange={(v) => {
+                  setPinAfter(v)
+                  run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), pin_after_publish: v })))
+                }}
+              />
+              <GlassOptionToggle
+                label="Тихий"
+                hint="Без push-уведомления подписчикам"
+                checked={silent}
+                icon={<SilentOptionIcon active={silent} />}
+                onChange={(v) => {
+                  setSilent(v)
+                  run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), disable_notification: v })))
+                }}
+              />
+              <GlassOptionToggle
+                label="Без футера"
+                hint="Не добавлять подпись канала к этому посту"
+                checked={skipFooter}
+                icon={<NoFooterOptionIcon active={skipFooter} />}
+                onChange={(v) => {
+                  setSkipFooter(v)
+                  run(async () => applyDraft(await api.patchDraft(draftId, { text: currentText(), skip_footer: v })))
+                }}
+              />
+            </div>
           )}
         </Section>
 
@@ -422,7 +485,7 @@ export function PostEditorSheet({
             <GlassButton disabled={busy || !canPublish} full trailing={<Clock size={16} weight="light" />} onClick={() => run(async () => { await patchForPublish(); await api.scheduleDraft(draftId, scheduleAt); onClose() }, 'Запланировано')}>
               В расписание
             </GlassButton>
-            <GlassButton className="mt-2" variant="secondary" disabled={busy || !canPublish} full trailing={<RocketLaunch size={16} weight="light" />} onClick={() => run(async () => { await patchForPublish(); const d = await api.publishDraft(draftId); setMsg(d.warning || 'Опубликовано'); WebApp.HapticFeedback?.notificationOccurred('success'); onClose() })}>
+            <GlassButton className="mt-2" variant="secondary" disabled={busy || !canPublish} full trailing={<RocketLaunch size={16} weight="light" />} onClick={() => run(async () => { await patchForPublish(); const d = await api.publishDraft(draftId); toast.show(d.warning || 'Опубликовано', false); WebApp.HapticFeedback?.notificationOccurred('success'); onClose() })}>
               Сейчас
             </GlassButton>
             {!canPublish && <p className="text-xs text-[var(--glass-danger)] mt-2">Добавьте текст или картинку</p>}
@@ -440,8 +503,24 @@ export function PostEditorSheet({
         <MediaPickerDialog
           title={picker === 'remove' ? 'Какое фото убрать?' : 'Какое фото отредактировать ИИ?'}
           count={mediaCount}
-          onPick={(index) => { setPicker(null); picker === 'remove' ? removeMediaAt(index) : runAiEditAt(index) }}
+          onPick={(index) => {
+            setPicker(null)
+            if (picker === 'remove') removeMediaAt(index)
+            else startAiEdit(index)
+          }}
           onCancel={() => setPicker(null)}
+        />
+      )}
+
+      {aiEditIndex !== null && (
+        <AiImageEditDialog
+          photoIndex={aiEditIndex}
+          photoCount={mediaCount}
+          prompt={aiEditPrompt}
+          busy={busy}
+          onPromptChange={setAiEditPrompt}
+          onSubmit={submitAiEdit}
+          onCancel={() => { if (!busy) { setAiEditIndex(null); setAiEditPrompt('') } }}
         />
       )}
     </GlassSheet>

@@ -70,11 +70,21 @@ const NETWORK_RU: Record<string, string> = {
 }
 
 const ERROR_RU: Record<string, string> = {
-  past: 'Это время уже прошло по Москве — укажите дату и время в будущем',
+  past: 'Это время уже прошло — выберите будущее',
   empty: 'Укажите дату и время',
-  'bad format': 'Неверный формат. Нужно: ДД.ММ.ГГГГ ЧЧ:ММ (по Москве)',
+  'bad format': 'Неверный формат: ДД.ММ.ГГГГ ЧЧ:ММ',
   'wrong separator': 'Используйте точки в дате: 28.06.2026 15:30',
 }
+
+const ERROR_PATTERNS: [RegExp, string][] = [
+  [/уже прошло/i, 'Это время уже прошло — выберите будущее'],
+  [/неверная дата|неверный формат|bad format/i, 'Неверный формат: ДД.ММ.ГГГГ ЧЧ:ММ'],
+  [/кириллиц/i, 'Ссылка только латиницей'],
+  [/неверный @channel/i, 'Неверный @channel'],
+  [/укажите, что изменить/i, 'Опишите, что изменить на фото'],
+  [/недостаточно кредитов|402/i, 'Недостаточно кредитов'],
+  [/не удалось связаться|failed to fetch|network/i, 'Нет связи с сервером'],
+]
 
 const HTTP_RU: Record<number, string> = {
   401: 'Сессия истекла — закройте и откройте приложение через бота',
@@ -83,7 +93,7 @@ const HTTP_RU: Record<number, string> = {
   402: 'Недостаточно кредитов',
   500: 'Ошибка на сервере — попробуйте позже',
   502: 'Сервер недоступен — перезапустите бота и tunnel',
-  503: 'Сервер временно недоступен',
+  503: 'Сервис временно недоступен',
   504: 'Таймаут сервера',
 }
 
@@ -93,8 +103,10 @@ const API_RU: Record<string, string> = {
   'invalid button url': 'Некорректная ссылка для кнопки',
   'неверная ссылка для кнопки. укажите https://…, t.me/… или @channel': 'Неверная ссылка для кнопки',
   'неверная ссылка или текст кнопки': 'Неверная ссылка или текст кнопки',
-  'максимум 10 фото в одном посте (как в telegram)': 'Максимум 10 фото в одном посте',
-  'максимум 10 фото в одном посте': 'Максимум 10 фото в одном посте',
+  'максимум 10 фото в одном посте (как в telegram)': 'Максимум 10 фото без текста',
+  'максимум 10 фото в одном посте': 'Максимум 10 фото без текста',
+  'с текстом — максимум 1 фото': 'С текстом — максимум 1 фото',
+  'с текстом — максимум 1 фото. удалите лишние.': 'С текстом — максимум 1 фото. Удалите лишние.',
   'invalid button': 'Некорректная кнопка — проверьте URL и текст',
   'time must be in the future (msk)': 'Время должно быть в будущем по Москве',
   'draft not found': 'Черновик не найден',
@@ -125,13 +137,31 @@ export function humanApiError(raw: string): string {
   if (NETWORK_RU[plainKey]) return NETWORK_RU[plainKey]
   if (API_RU[plainKey]) return API_RU[plainKey]
 
-  if (/[а-яА-ЯёЁ]/.test(plain)) return plain
+  for (const [re, msg] of ERROR_PATTERNS) {
+    if (re.test(plain)) return msg
+  }
+
+  if (/[а-яА-ЯёЁ]/.test(plain)) return shortenMessage(plain)
 
   for (const [en, ru] of Object.entries({ ...NETWORK_RU, ...API_RU })) {
     if (key.includes(en)) return ru
   }
 
-  return plain || 'Что-то пошло не так — попробуйте ещё раз'
+  return shortenMessage(plain || 'Что-то пошло не так')
+}
+
+/** Короткое сообщение для тостов — первая строка, без лишнего текста. */
+export function shortenMessage(text: string, maxLen = 64): string {
+  const line = text
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .split('\n')
+    .map((s) => s.trim())
+    .find(Boolean) ?? text
+
+  const cleaned = line.replace(/^❌\s*/, '').trim()
+  if (cleaned.length <= maxLen) return cleaned
+  return `${cleaned.slice(0, maxLen - 1).trim()}…`
 }
 
 export function humanError(err: unknown): string {

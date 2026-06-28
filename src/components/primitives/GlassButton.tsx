@@ -2,11 +2,13 @@ import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Size = 'default' | 'sm'
 
 export function GlassButton({
   children,
   onClick,
   variant = 'primary',
+  size = 'default',
   disabled,
   full,
   type = 'button',
@@ -16,14 +18,20 @@ export function GlassButton({
   children: ReactNode
   onClick?: () => void
   variant?: Variant
+  size?: Size
   disabled?: boolean
   full?: boolean
   type?: 'button' | 'submit'
   className?: string
   trailing?: ReactNode
 }) {
+  const sizes: Record<Size, string> = {
+    default: 'px-5 py-3 text-sm',
+    sm: 'px-4 py-2 text-xs',
+  }
+
   const base =
-    'group inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold transition-transform duration-200 ease-[var(--spring)] active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100'
+    'group inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-transform duration-200 ease-[var(--spring)] active:scale-[0.98] disabled:opacity-45 disabled:cursor-not-allowed disabled:active:scale-100'
 
   const variants: Record<Variant, string> = {
     primary: 'bg-[var(--glass-accent)] text-[#041510] shadow-[0_8px_24px_-8px_rgba(16,185,129,0.55)]',
@@ -36,13 +44,18 @@ export function GlassButton({
   return (
     <button
       type={type}
-      className={cn(base, variants[variant], full && 'w-full', className)}
+      className={cn(base, sizes[size], variants[variant], full && 'w-full', className)}
       onClick={onClick}
       disabled={disabled}
     >
       <span>{children}</span>
       {trailing && (
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-black/10 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-px group-active:scale-95">
+        <span
+          className={cn(
+            'flex items-center justify-center rounded-full bg-black/10 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-px group-active:scale-95',
+            size === 'sm' ? 'h-6 w-6' : 'h-8 w-8',
+          )}
+        >
           {trailing}
         </span>
       )}

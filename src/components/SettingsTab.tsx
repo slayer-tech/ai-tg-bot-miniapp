@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { Gear, X } from '@phosphor-icons/react'
-import { api, channelName, type Channel, type Settings } from '../lib/api'
+import { api, channelName, humanError, type Channel, type Settings } from '../lib/api'
 import { RichTextEditor } from './RichTextEditor'
-import { GlassBadge, GlassButton, GlassCard, GlassField, GlassInput, GlassTextarea, GlassToggle, Toast, EmptyState } from './primitives'
+import { GlassBadge, GlassButton, GlassCard, GlassField, GlassInput, GlassTextarea, GlassToggle, useToast, EmptyState } from './primitives'
 
 export function SettingsTab({
   settings,
@@ -25,7 +25,7 @@ export function SettingsTab({
   const [competitors, setCompetitors] = useState<string[]>([])
   const [newComp, setNewComp] = useState('')
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
+  const toast = useToast()
 
   useEffect(() => {
     if (!settings) return
@@ -37,9 +37,8 @@ export function SettingsTab({
   }, [settings])
 
   const flash = (text: string) => {
-    setMsg(text)
+    toast.show(text, false)
     WebApp.HapticFeedback?.notificationOccurred('success')
-    setTimeout(() => setMsg(null), 2000)
   }
 
   const run = async (fn: () => Promise<void>) => {
@@ -48,7 +47,7 @@ export function SettingsTab({
       await fn()
       await onRefresh()
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e))
+      toast.show(humanError(e), true)
     } finally {
       setBusy(false)
     }
@@ -64,7 +63,7 @@ export function SettingsTab({
 
   return (
     <div className="flex flex-col gap-4">
-      {msg && <Toast>{msg}</Toast>}
+      {toast.node}
 
       <GlassCard title="Публикация">
         <GlassField label="Подпись (footer)" hint="B / I / U / ссылка в панели редактора">

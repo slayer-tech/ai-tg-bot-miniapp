@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
 import { ArrowLeft, Sparkle } from '@phosphor-icons/react'
 import { api, humanError } from '../lib/api'
-import { GlassButton, GlassIconButton, GlassModal, Toast } from './primitives'
+import { GlassButton, GlassIconButton, GlassModal, useToast } from './primitives'
 import { GlassTextarea } from './primitives/GlassField'
 
 type Mode = 'pick' | 'idea' | 'reference'
@@ -21,18 +21,18 @@ export function CreatePostDialog({
   const [refText, setRefText] = useState('')
   const [refFile, setRefFile] = useState<File | null>(null)
   const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
+  const toast = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const run = async (fn: () => Promise<number>) => {
     setBusy(true)
-    setErr(null)
+    toast.clear()
     try {
       const id = await fn()
       WebApp.HapticFeedback?.notificationOccurred('success')
       onCreated(id)
     } catch (e) {
-      setErr(humanError(e))
+      toast.show(humanError(e), true)
     } finally {
       setBusy(false)
     }
@@ -47,7 +47,7 @@ export function CreatePostDialog({
         <strong className="text-sm flex-1">Новый пост</strong>
       </header>
 
-      {err && <Toast error>{err}</Toast>}
+      {toast.node}
 
       <div className="p-4 flex flex-col gap-3 max-h-[70dvh] overflow-y-auto">
         {mode === 'pick' && (

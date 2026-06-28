@@ -1,5 +1,7 @@
+import { Sparkle } from '@phosphor-icons/react'
 import { GlassButton } from './primitives/GlassButton'
 import { GlassModal } from './primitives/GlassSheet'
+import { GlassTextarea } from './primitives/GlassField'
 
 export function MediaPickerDialog({
   title,
@@ -29,6 +31,53 @@ export function MediaPickerDialog({
           ))}
         </div>
         <GlassButton variant="secondary" full onClick={onCancel}>
+          Отмена
+        </GlassButton>
+      </div>
+    </GlassModal>
+  )
+}
+
+export function AiImageEditDialog({
+  photoIndex,
+  photoCount,
+  prompt,
+  busy,
+  onPromptChange,
+  onSubmit,
+  onCancel,
+}: {
+  photoIndex: number
+  photoCount: number
+  prompt: string
+  busy: boolean
+  onPromptChange: (v: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+}) {
+  return (
+    <GlassModal open onClose={onCancel}>
+      <div className="p-5 flex flex-col gap-3">
+        <strong className="text-sm">ИИ-редакт фото {photoIndex + 1}{photoCount > 1 ? ` из ${photoCount}` : ''}</strong>
+        <p className="text-xs text-[var(--glass-hint)] m-0">
+          Опишите, что изменить: убрать водяной знак, поменять фон, добавить деталь…
+        </p>
+        <GlassTextarea
+          rows={4}
+          placeholder="Например: убери логотип в углу, сделай фон светлее"
+          value={prompt}
+          disabled={busy}
+          onChange={(e) => onPromptChange(e.target.value)}
+        />
+        <GlassButton
+          disabled={busy || prompt.trim().length < 2}
+          full
+          trailing={<Sparkle size={14} weight="fill" />}
+          onClick={onSubmit}
+        >
+          {busy ? 'Обработка…' : 'Доработать'}
+        </GlassButton>
+        <GlassButton variant="secondary" disabled={busy} full onClick={onCancel}>
           Отмена
         </GlassButton>
       </div>
