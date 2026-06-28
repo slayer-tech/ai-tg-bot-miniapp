@@ -48,7 +48,7 @@ export function scheduleFromIso(iso: string): string {
 
 const NETWORK_RU: Record<string, string> = {
   'load failed':
-    'Не удалось связаться с сервером. Перезапустите бота (./scripts/start_dev.sh) и откройте приложение заново',
+    'Не удалось связаться с сервером. Перезапустите бота (./restart.sh) и откройте приложение заново',
   'failed to fetch':
     'Нет связи с сервером. Проверьте интернет и что бот запущен',
   'networkerror when attempting to fetch resource.':

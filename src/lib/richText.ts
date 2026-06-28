@@ -40,10 +40,18 @@ export function htmlToTelegram(html: string): string {
 /** Telegram HTML → contenteditable HTML for editing. */
 export function telegramToHtml(text: string): string {
   if (!text) return ''
-  return text.replace(/\n/g, '<br>')
+  // Footer хранится как Telegram HTML (<b>, <a href="...">…) — не экранируем теги.
+  if (/<\s*(a|b|i|u|strong|em)\b/i.test(text)) {
+    return text.replace(/\n/g, '<br>')
+  }
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
 }
 
-function saveSelection(container: HTMLElement): Range | null {
+export function saveSelection(container: HTMLElement): Range | null {
   const sel = window.getSelection()
   if (!sel || sel.rangeCount === 0) return null
   const range = sel.getRangeAt(0)
@@ -65,21 +73,11 @@ function normalizeUrl(raw: string): string {
   return `https://${url}`
 }
 
-/** Вставить или обернуть ссылку (selection сохраняется через prompt). */
-export function applyLink(container: HTMLElement): void {
-  let saved = saveSelection(container)
-  if (!saved) {
-    container.focus()
-    const range = document.createRange()
-    range.selectNodeContents(container)
-    range.collapse(false)
-    saved = range
-  }
-
-  const urlRaw = prompt('URL ссылки', 'https://')?.trim()
-  if (!urlRaw) return
-
+/** Вставить или обернуть ссылку (URL из диалога — prompt в Telegram WebApp не работает). */
+export function applyLink(container: HTMLElement, saved: Range, urlRaw: string): void {
   const href = normalizeUrl(urlRaw)
+  if (!href) return
+
   restoreSelection(saved)
   container.focus()
 
@@ -88,7 +86,7 @@ export function applyLink(container: HTMLElement): void {
   const range = sel.getRangeAt(0)
 
   if (range.collapsed) {
-    const label = urlRaw.replace(/^https?:\/\//i, '')
+    const label = urlRaw.replace(/^https?:\/\//i, '').replace(/\/$/, '') || href
     const a = document.createElement('a')
     a.href = href
     a.textContent = label
@@ -100,7 +98,15 @@ export function applyLink(container: HTMLElement): void {
     return
   }
 
-  document.execCommand('createLink', false, href)
+  const a = document.createElement('a')
+  a.href = href
+  const fragment = range.extractContents()
+  a.appendChild(fragment)
+  range.insertNode(a)
+  range.setStartAfter(a)
+  range.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(range)
 }
 
 /** Снять форматирование и убрать ссылки. */
@@ -133,10 +139,11 @@ function unwrapAllLinks(container: HTMLElement) {
   container.querySelectorAll('a').forEach((a) => unwrapElement(a as HTMLElement))
 }
 
-export function formatCmd(container: HTMLElement, cmd: string) {
+export function formatCmd(container: HTMLElement, cmd: string, linkUrl?: string, savedRange?: Range | null) {
   container.focus()
   if (cmd === 'link') {
-    applyLink(container)
+    if (!linkUrl || !savedRange) return
+    applyLink(container, savedRange, linkUrl)
     return
   }
   if (cmd === 'removeFormat') {
