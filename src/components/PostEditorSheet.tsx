@@ -12,9 +12,12 @@ import { Btn, SegmentChips, Toggle } from './ui'
 import { MAX_DRAFT_PHOTOS, validateInlineButtonUrl } from '../lib/validateUrl'
 
 type Aspect = 'vertical' | 'square' | 'horizontal'
-type AutoDel = 0 | 1 | 24 | 48
 
-const AUTODELETE_OPTS: { value: AutoDel; label: string }[] = [
+const AUTODELETE_PRESETS = [0, 1, 24, 48] as const
+const AUTODELETE_MIN = 1
+const AUTODELETE_MAX = 720
+
+const AUTODELETE_OPTS = [
   { value: 0, label: 'Выкл' },
   { value: 1, label: '1 ч' },
   { value: 24, label: '24 ч' },
@@ -31,10 +34,7 @@ function defaultSchedule(dayIso?: string): string {
   return defaultScheduleMsk(dayIso)
 }
 
-function toAutoDel(h: number | null): AutoDel {
-  if (h === 1 || h === 24 || h === 48) return h
-  return 0
-}
+const PRESET_SET = new Set<number>(AUTODELETE_PRESETS)
 
 export function PostEditorSheet({
   draftId,
@@ -51,7 +51,8 @@ export function PostEditorSheet({
   const [text, setText] = useState('')
   const [btnUrl, setBtnUrl] = useState('')
   const [btnText, setBtnText] = useState('')
-  const [autodelete, setAutodelete] = useState<AutoDel>(0)
+  const [autodelete, setAutodelete] = useState(0)
+  const [autodeleteCustom, setAutodeleteCustom] = useState('')
   const [silent, setSilent] = useState(false)
   const [pinAfter, setPinAfter] = useState(false)
   const [scheduleAt, setScheduleAt] = useState(() => defaultSchedule(defaultDay))
@@ -97,7 +98,12 @@ export function PostEditorSheet({
     setText(d.text || '')
     setBtnUrl(d.inline_button_url || '')
     setBtnText(d.inline_button_text || '')
-    setAutodelete(toAutoDel(d.autodelete_hours))
+    setAutodelete(d.autodelete_hours ?? 0)
+    setAutodeleteCustom(
+      d.autodelete_hours && !PRESET_SET.has(d.autodelete_hours)
+        ? String(d.autodelete_hours)
+        : '',
+    )
     setPinAfter(d.pin_after_publish)
     setSilent(d.disable_notification)
     setBtnUrlError(null)
@@ -166,8 +172,13 @@ export function PostEditorSheet({
 
   const canPublish = Boolean(stripHtml(text).trim() || draft?.has_media)
 
-  const saveAutodelete = (h: AutoDel) => {
+  const saveAutodelete = (h: number) => {
+    if (h !== 0 && (h < AUTODELETE_MIN || h > AUTODELETE_MAX)) {
+      setMsg(`Автоудаление: от ${AUTODELETE_MIN} до ${AUTODELETE_MAX} ч`)
+      return
+    }
     setAutodelete(h)
+    if (PRESET_SET.has(h)) setAutodeleteCustom('')
     run(async () => {
       const d = await api.patchDraft(draftId, {
         text: currentText(),
@@ -176,6 +187,19 @@ export function PostEditorSheet({
       await applyDraft(d)
     }, h ? `Автоудаление: ${h} ч` : 'Автоудаление выкл')
   }
+
+  const applyCustomAutodelete = () => {
+    const raw = autodeleteCustom.trim()
+    if (!raw) return
+    const n = Number.parseInt(raw, 10)
+    if (!Number.isFinite(n)) {
+      setMsg('Укажите целое число часов')
+      return
+    }
+    saveAutodelete(n)
+  }
+
+  const autodeleteChipValue = PRESET_SET.has(autodelete) ? autodelete : -1
 
   const saveButton = (useAi = false) => {
     if (!checkBtnUrl()) {
@@ -513,10 +537,40 @@ export function PostEditorSheet({
             <p className="field-hint">⏱ Автоудаление из канала после публикации</p>
             <SegmentChips
               options={AUTODELETE_OPTS}
-              value={autodelete}
+              value={autodeleteChipValue}
               onChange={(v) => saveAutodelete(v)}
               disabled={busy}
             />
+            <div className="inline-add">
+              <input
+                className="input"
+                type="number"
+                min={AUTODELETE_MIN}
+                max={AUTODELETE_MAX}
+                inputMode="numeric"
+                placeholder="Своё время, ч"
+                value={autodeleteCustom}
+                disabled={busy}
+                onChange={(e) => setAutodeleteCustom(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    applyCustomAutodelete()
+                  }
+                }}
+              />
+              <Btn
+                variant="secondary"
+                disabled={busy || !autodeleteCustom.trim()}
+                onClick={applyCustomAutodelete}
+              >
+                OK
+              </Btn>
+            </div>
+            {autodelete > 0 && !PRESET_SET.has(autodelete) && (
+              <p className="field-hint">Сейчас: удаление через {autodelete} ч</p>
+            )}
+            <p className="field-hint">От 1 до 720 часов (30 суток)</p>
             {editable && (
               <>
                 <Toggle
