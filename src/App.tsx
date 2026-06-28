@@ -3,6 +3,7 @@ import WebApp from '@twa-dev/sdk'
 import './App.css'
 import {
   api,
+  hasTelegramAuth,
   type Autopilot,
   type Channel,
   type Me,
@@ -30,6 +31,12 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
+      if (!hasTelegramAuth()) {
+        setError(
+          'Откройте через кнопку «Открыть приложение» в боте Telegram. В обычном браузере API недоступен.',
+        )
+        return
+      }
       const [meData, chList, activeData] = await Promise.all([
         api.getMe(),
         api.getChannels(),
@@ -61,8 +68,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    WebApp.ready()
-    WebApp.expand()
+    try {
+      WebApp.ready()
+      WebApp.expand()
+    } catch {
+      /* вне Telegram — ok */
+    }
     load()
   }, [load])
 

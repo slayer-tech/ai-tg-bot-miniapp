@@ -2,23 +2,29 @@ import WebApp from '@twa-dev/sdk'
 
 const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 
-function authHeader(): string {
+export function hasTelegramAuth(): boolean {
+  return Boolean(WebApp.initData)
+}
+
+function authHeader(): string | null {
   const initData = WebApp.initData
-  if (!initData) {
-    throw new Error('Telegram initData недоступен — откройте через бота')
-  }
+  if (!initData) return null
   return `tma ${initData}`
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const auth = authHeader()
+  if (!auth) {
+    throw new Error('Откройте приложение через бота в Telegram (нужен initData)')
+  }
   if (!API_URL) {
-    throw new Error('VITE_API_URL не задан')
+    throw new Error('VITE_API_URL не задан при сборке')
   }
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: authHeader(),
+      Authorization: auth,
       ...(init?.headers || {}),
     },
   })

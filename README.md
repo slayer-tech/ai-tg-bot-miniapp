@@ -15,23 +15,15 @@ npm run dev
 
 ## GitHub Pages
 
-1. Создайте репозиторий и включите Pages (branch `gh-pages` или `/docs` — как удобно).
-2. Скопируйте `.env.production.example` → `.env.production`:
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions**
+2. В репозитории: **Settings → Secrets and variables → Actions** → добавь `VITE_API_URL` (HTTPS tunnel/API)
+3. Push в `main` — workflow соберёт `dist/` и задеплоит автоматически
 
 ```bash
-VITE_API_URL=https://your-tunnel.trycloudflare.com
-VITE_BASE_PATH=/ai-tg-bot-miniapp/
+npm run build   # локально: dist/ с base /ai-tg-bot-miniapp/
 ```
 
-3. Сборка:
-
-```bash
-npm run build
-# dist/ → задеплойте на Pages
-```
-
-4. В BotFather укажите URL Mini App.
-5. В `.env` бэкенда:
+**Важно:** нельзя деплоить исходники — на Pages должен быть только `dist/` (иначе белый экран: браузер ищет `/src/main.tsx`).
 
 ```
 MINI_APP_URL=https://youruser.github.io/ai-tg-bot-miniapp/
