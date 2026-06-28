@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import WebApp from '@twa-dev/sdk'
 import './App.css'
+import { AutopilotTab } from './components/AutopilotTab'
+import { PlannerTab } from './components/PlannerTab'
+import { ProfileTab } from './components/ProfileTab'
+import { SettingsTab } from './components/SettingsTab'
 import {
   api,
+  channelName,
   hasTelegramAuth,
   type Autopilot,
+  type CalendarWeek,
   type Channel,
   type Me,
   type Settings,
@@ -12,29 +18,50 @@ import {
 
 type Tab = 'planner' | 'autopilot' | 'settings' | 'account'
 
-function channelName(c: Channel) {
-  return c.title || (c.username ? `@${c.username}` : `#${c.id}`)
-}
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'planner', label: 'План', icon: '📅' },
+  { id: 'autopilot', label: 'Auto', icon: '🚀' },
+  { id: 'settings', label: 'Настройки', icon: '⚙️' },
+  { id: 'account', label: 'Профиль', icon: '👤' },
+]
 
 export default function App() {
   const [tab, setTab] = useState<Tab>('planner')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [me, setMe] = useState<Me | null>(null)
+  const [billing, setBilling] = useState<{
+    text_credits: number
+    image_credits: number
+    unlimited: boolean
+  } | null>(null)
   const [active, setActive] = useState<Channel | null>(null)
   const [channels, setChannels] = useState<Channel[]>([])
-  const [calendarText, setCalendarText] = useState('')
+  const [week, setWeek] = useState<CalendarWeek | null>(null)
+  const [weekMonday, setWeekMonday] = useState<string | undefined>()
   const [settings, setSettings] = useState<Settings | null>(null)
   const [autopilot, setAutopilot] = useState<Autopilot | null>(null)
+
+  const loadChannelData = useCallback(async (monday?: string) => {
+    const [w, st, ap, bill] = await Promise.all([
+      api.getCalendarWeek(monday),
+      api.getSettings(),
+      api.getAutopilot(),
+      api.getBilling(),
+    ])
+    setWeek(w)
+    setWeekMonday(w.monday)
+    setSettings(st)
+    setAutopilot(ap)
+    setBilling(bill)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       if (!hasTelegramAuth()) {
-        setError(
-          'Откройте через кнопку «Открыть приложение» в боте Telegram. В обычном браузере API недоступен.',
-        )
+        setError('Откройте через кнопку «Открыть приложение» в боте')
         return
       }
       const [meData, chList, activeData] = await Promise.all([
@@ -45,18 +72,10 @@ export default function App() {
       setMe(meData)
       setChannels(chList)
       setActive(activeData.channel)
-
       if (activeData.channel) {
-        const [week, st, ap] = await Promise.all([
-          api.getCalendarWeek(),
-          api.getSettings(),
-          api.getAutopilot(),
-        ])
-        setCalendarText(week.text)
-        setSettings(st)
-        setAutopilot(ap)
+        await loadChannelData(weekMonday)
       } else {
-        setCalendarText('')
+        setWeek(null)
         setSettings(null)
         setAutopilot(null)
       }
@@ -65,38 +84,34 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [loadChannelData, weekMonday])
 
   useEffect(() => {
     try {
       WebApp.ready()
       WebApp.expand()
+      WebApp.setHeaderColor('secondary_bg_color')
+      WebApp.setBackgroundColor('bg_color')
     } catch {
-      /* вне Telegram — ok */
+      /* ok */
     }
     load()
-  }, [load])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const refresh = () => load()
 
   const switchChannel = async (id: number) => {
-    try {
-      await api.switchChannel(id)
-      WebApp.HapticFeedback?.impactOccurred('light')
-      await load()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
+    await api.switchChannel(id)
+    WebApp.HapticFeedback?.impactOccurred('light')
+    setWeekMonday(undefined)
+    await load()
   }
 
-  const toggleAutopilot = async () => {
-    if (!autopilot) return
+  const changeWeek = async (monday: string) => {
+    setWeekMonday(monday)
     try {
-      if (autopilot.paused || !autopilot.enabled) {
-        await api.resumeAutopilot()
-      } else {
-        await api.pauseAutopilot()
-      }
-      const ap = await api.getAutopilot()
-      setAutopilot(ap)
+      const w = await api.getCalendarWeek(monday)
+      setWeek(w)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -107,136 +122,71 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>AI Content Planner</h1>
-        <p>
-          {active
-            ? channelName(active)
-            : 'Подключите канал в чате с ботом'}
-        </p>
+        <div>
+          <h1>Content Planner</h1>
+          <p className="header-sub">
+            {active ? channelName(active) : 'Канал не выбран'}
+          </p>
+        </div>
+        {active && (
+          <span className={`conn ${active.is_bot_connected ? 'ok' : 'bad'}`}>
+            {active.is_bot_connected ? '● online' : '● offline'}
+          </span>
+        )}
       </header>
 
       <main className="content">
-        {error && <div className="error">{error}</div>}
-        {loading && <p className="muted">Загрузка…</p>}
-
-        {!loading && tab === 'planner' && (
-          <>
-            {noChannel ? (
-              <div className="card">
-                <h2>Нет активного канала</h2>
-                <p className="muted">
-                  В чате с ботом нажмите «Подключить канал», затем вернитесь
-                  сюда.
-                </p>
-              </div>
-            ) : (
-              <div className="card">
-                <h2>Календарь</h2>
-                <pre className="pre">{calendarText || 'Пусто'}</pre>
-              </div>
-            )}
-          </>
-        )}
-
-        {!loading && tab === 'autopilot' && (
-          <div className="card">
-            <h2>Autopilot</h2>
-            {noChannel ? (
-              <p className="muted">Сначала подключите канал.</p>
-            ) : autopilot ? (
-              <>
-                <p className="muted">
-                  {autopilot.enabled && !autopilot.paused
-                    ? '✅ Работает'
-                    : '⏸ На паузе'}
-                  {' · '}
-                  {autopilot.posts_per_day} пост/день · очередь:{' '}
-                  {JSON.stringify(autopilot.queue_stats)}
-                </p>
-                <button type="button" className="btn" onClick={toggleAutopilot}>
-                  {autopilot.paused || !autopilot.enabled
-                    ? 'Запустить'
-                    : 'Пауза'}
-                </button>
-              </>
-            ) : null}
-          </div>
-        )}
-
-        {!loading && tab === 'settings' && (
-          <>
-            {settings ? (
-              <div className="card">
-                <h2>Настройки канала</h2>
-                <p className="muted">
-                  Конкуренты: {settings.competitors_count}
-                  <br />
-                  Слоты: {settings.slots.join(', ') || '—'}
-                  <br />
-                  Джиттер: {settings.schedule_jitter_enabled ? 'вкл' : 'выкл'}
-                </p>
-              </div>
-            ) : (
-              <div className="card">
-                <p className="muted">Нет активного канала.</p>
-              </div>
-            )}
-            <div className="card">
-              <h2>Каналы</h2>
-              <ul className="channel-list">
-                {channels.map((c) => (
-                  <li key={c.id}>
-                    <span>{channelName(c)}</span>
-                    {c.id === active?.id ? (
-                      <span className="muted">активный</span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        onClick={() => switchChannel(c.id)}
-                      >
-                        Выбрать
-                      </button>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        )}
-
-        {!loading && tab === 'account' && me && (
-          <div className="card">
-            <h2>Аккаунт</h2>
-            <p className="muted">
-              ID: {me.id}
-              {me.username ? ` · @${me.username}` : ''}
-              <br />
-              Текст: {me.text_credits} · Картинки: {me.image_credits}
-            </p>
-            <button type="button" className="btn secondary" onClick={load}>
-              Обновить
+        {error && (
+          <div className="error">
+            {error}
+            <button type="button" className="error-retry" onClick={refresh}>
+              Повторить
             </button>
           </div>
+        )}
+        {loading && <div className="loader">Загрузка…</div>}
+
+        {!loading && noChannel && (
+          <section className="card empty-state">
+            <span className="empty-icon">📢</span>
+            <h2>Подключите канал</h2>
+            <p>В чате с ботом нажмите «Подключить канал» и перешлите пост.</p>
+          </section>
+        )}
+
+        {!loading && !noChannel && tab === 'planner' && (
+          <PlannerTab week={week} onWeekChange={changeWeek} />
+        )}
+        {!loading && !noChannel && tab === 'autopilot' && (
+          <AutopilotTab autopilot={autopilot} onUpdate={loadChannelData} />
+        )}
+        {!loading && tab === 'settings' && (
+          <SettingsTab
+            settings={settings}
+            channels={channels}
+            activeId={active?.id ?? null}
+            onRefresh={loadChannelData}
+            onSwitchChannel={switchChannel}
+          />
+        )}
+        {!loading && tab === 'account' && me && (
+          <ProfileTab me={me} billing={billing} onRefresh={refresh} />
         )}
       </main>
 
       <nav className="tabs">
-        {(
-          [
-            ['planner', 'План'],
-            ['autopilot', 'Auto'],
-            ['settings', 'Настр.'],
-            ['account', 'Профиль'],
-          ] as const
-        ).map(([id, label]) => (
+        {TABS.map(({ id, label, icon }) => (
           <button
             key={id}
             type="button"
             className={`tab ${tab === id ? 'active' : ''}`}
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id)
+              WebApp.HapticFeedback?.selectionChanged()
+            }}
           >
-            {label}
+            <span className="tab-icon">{icon}</span>
+            <span className="tab-label">{label}</span>
           </button>
         ))}
       </nav>
