@@ -1,56 +1,71 @@
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { formatCmd, htmlToTelegram, saveSelection, telegramToHtml } from '../lib/richText'
 
-export function RichTextEditor({
-  value,
-  onChange,
-  placeholder,
-  rows = 4,
-  disabled,
-}: {
-  value: string
-  onChange: (html: string) => void
-  placeholder?: string
-  rows?: number
-  disabled?: boolean
-}) {
-  const ref = useRef<HTMLDivElement>(null)
-  const lastExternal = useRef(value)
+export type RichTextEditorHandle = {
+  getValue: () => string
+}
+
+export const RichTextEditor = forwardRef(function RichTextEditor(
+  {
+    value,
+    onChange,
+    placeholder,
+    rows = 4,
+    disabled,
+  }: {
+    value: string
+    onChange: (html: string) => void
+    placeholder?: string
+    rows?: number
+    disabled?: boolean
+  },
+  ref,
+) {
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const lastExternal = useRef<string | null>(null)
   const savedRangeRef = useRef<Range | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkUrl, setLinkUrl] = useState('https://')
   const linkInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!ref.current || value === lastExternal.current) return
-    ref.current.innerHTML = telegramToHtml(value)
+    if (!bodyRef.current) return
+    if (value === lastExternal.current) return
+    bodyRef.current.innerHTML = telegramToHtml(value)
     lastExternal.current = value
   }, [value])
+
+  useImperativeHandle(ref, () => ({
+    getValue: () => {
+      if (bodyRef.current) return htmlToTelegram(bodyRef.current.innerHTML)
+      return lastExternal.current ?? value
+    },
+  }), [value])
 
   useEffect(() => {
     if (linkOpen) linkInputRef.current?.focus()
   }, [linkOpen])
 
   const sync = () => {
-    if (!ref.current) return
-    const html = htmlToTelegram(ref.current.innerHTML)
+    if (!bodyRef.current) return
+    const html = htmlToTelegram(bodyRef.current.innerHTML)
     lastExternal.current = html
     onChange(html)
   }
 
   const runCmd = (cmd: string) => {
-    if (!ref.current || disabled) return
-    formatCmd(ref.current, cmd)
+    if (!bodyRef.current || disabled) return
+    formatCmd(bodyRef.current, cmd)
     sync()
   }
 
   const openLinkDialog = () => {
-    if (!ref.current || disabled) return
-    let saved = saveSelection(ref.current)
+    if (!bodyRef.current || disabled) return
+    let saved = saveSelection(bodyRef.current)
     if (!saved) {
-      ref.current.focus()
+      bodyRef.current.focus()
       const range = document.createRange()
-      range.selectNodeContents(ref.current)
+      range.selectNodeContents(bodyRef.current)
       range.collapse(false)
       saved = range
     }
@@ -61,11 +76,11 @@ export function RichTextEditor({
 
   const confirmLink = () => {
     const url = linkUrl.trim()
-    if (!url || !ref.current || !savedRangeRef.current) {
+    if (!url || !bodyRef.current || !savedRangeRef.current) {
       setLinkOpen(false)
       return
     }
-    formatCmd(ref.current, 'link', url, savedRangeRef.current)
+    formatCmd(bodyRef.current, 'link', url, savedRangeRef.current)
     sync()
     savedRangeRef.current = null
     setLinkOpen(false)
@@ -93,7 +108,7 @@ export function RichTextEditor({
         </button>
       </div>
       <div
-        ref={ref}
+        ref={bodyRef}
         className="rte-body"
         contentEditable={!disabled}
         data-placeholder={placeholder}
@@ -138,4 +153,4 @@ export function RichTextEditor({
       )}
     </div>
   )
-}
+})

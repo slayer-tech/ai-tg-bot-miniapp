@@ -6,7 +6,7 @@ import {
   formatScheduleMsk,
   scheduleFromIso,
 } from '../lib/scheduleMsk'
-import { RichTextEditor } from './RichTextEditor'
+import { RichTextEditor, type RichTextEditorHandle } from './RichTextEditor'
 import { MediaAlbumGrid, MediaPickerDialog } from './MediaAlbum'
 import { Btn, SegmentChips, Toggle } from './ui'
 import { MAX_DRAFT_PHOTOS, validateInlineButtonUrl } from '../lib/validateUrl'
@@ -65,6 +65,9 @@ export function PostEditorSheet({
   const [aiPrompt, setAiPrompt] = useState('')
   const [showAiWrite, setShowAiWrite] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<RichTextEditorHandle>(null)
+
+  const currentText = () => editorRef.current?.getValue() ?? text
 
   const revokeMediaBlobs = () => {
     mediaBlobsRef.current.forEach((u) => URL.revokeObjectURL(u))
@@ -147,7 +150,7 @@ export function PostEditorSheet({
       if (err) throw new Error(err)
     }
     const payload: Record<string, unknown> = {
-      text,
+      text: currentText(),
       autodelete_hours: autodelete || 0,
       pin_after_publish: pinAfter,
       disable_notification: silent,
@@ -166,7 +169,10 @@ export function PostEditorSheet({
   const saveAutodelete = (h: AutoDel) => {
     setAutodelete(h)
     run(async () => {
-      const d = await api.patchDraft(draftId, { autodelete_hours: h || 0 })
+      const d = await api.patchDraft(draftId, {
+        text: currentText(),
+        autodelete_hours: h || 0,
+      })
       await applyDraft(d)
     }, h ? `Автоудаление: ${h} ч` : 'Автоудаление выкл')
   }
@@ -178,6 +184,7 @@ export function PostEditorSheet({
     }
     return run(async () => {
       const d = await api.patchDraft(draftId, {
+        text: currentText(),
         inline_button_url: btnUrl.trim(),
         inline_button_text: useAi ? '/auto' : btnText.trim() || '/auto',
         clear_button: false,
@@ -264,7 +271,7 @@ export function PostEditorSheet({
             onClick={() =>
               run(async () => {
                 await api.patchDraft(draftId, {
-                  text,
+                  text: currentText(),
                   autodelete_hours: autodelete || 0,
                   pin_after_publish: pinAfter,
                   disable_notification: silent,
@@ -389,7 +396,14 @@ export function PostEditorSheet({
             <h3>📝 Текст</h3>
             {editable ? (
               <>
-                <RichTextEditor value={text} onChange={setText} placeholder="Текст поста…" rows={6} disabled={busy} />
+                <RichTextEditor
+                  ref={editorRef}
+                  value={text}
+                  onChange={setText}
+                  placeholder="Текст поста…"
+                  rows={6}
+                  disabled={busy}
+                />
                 <div className="ai-row">
                   <Btn variant="secondary" disabled={busy} onClick={() => run(async () => { const d = await api.aiText(draftId, 'shorten'); await applyDraft(d); setText(d.text) }, 'Короче')}>
                     Короче
@@ -476,7 +490,10 @@ export function PostEditorSheet({
                   disabled={busy}
                   onClick={() =>
                     run(async () => {
-                      const d = await api.patchDraft(draftId, { clear_button: true })
+                      const d = await api.patchDraft(draftId, {
+                        text: currentText(),
+                        clear_button: true,
+                      })
                       await applyDraft(d)
                       setBtnUrl('')
                       setBtnText('')
@@ -508,7 +525,10 @@ export function PostEditorSheet({
                   onChange={(v) => {
                     setPinAfter(v)
                     run(async () => {
-                      const d = await api.patchDraft(draftId, { pin_after_publish: v })
+                      const d = await api.patchDraft(draftId, {
+                        text: currentText(),
+                        pin_after_publish: v,
+                      })
                       await applyDraft(d)
                     })
                   }}
@@ -519,7 +539,10 @@ export function PostEditorSheet({
                   onChange={(v) => {
                     setSilent(v)
                     run(async () => {
-                      const d = await api.patchDraft(draftId, { disable_notification: v })
+                      const d = await api.patchDraft(draftId, {
+                        text: currentText(),
+                        disable_notification: v,
+                      })
                       await applyDraft(d)
                     })
                   }}
